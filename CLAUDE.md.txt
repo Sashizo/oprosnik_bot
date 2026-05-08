@@ -1,0 +1,245 @@
+# Project context
+
+We are building an MVP LLM-based interviewer bot for qualitative social research.
+The bot conducts short (5–10 min) semi-structured interviews in Russian via chat.
+This project implements the practical part of a thesis on LLM-bots as tools for
+qualitative data collection.
+
+The system must:
+- support a short, semi-structured interview format (5–10 minutes, ~5–10 main turns);
+- follow a predefined interview guide with adaptive follow-up questions;
+- log all sessions for qualitative and quantitative analysis;
+- be robust to prompt injection and obvious model failures;
+- be simple enough to run locally by a small student team.
+
+---
+
+## Goals
+
+High-level research goals (from the thesis):
+
+1. Analyze existing LLM-interviewer solutions and derive requirements for architecture
+   and interview scenarios.
+2. Design an architecture with these core components:
+   - Dialog Manager
+   - Prompt Engine
+   - LLM client
+   - Database / storage module
+3. Implement an MVP bot based on FastAPI and Telegram that can conduct a short interview.
+4. Develop and test prompt templates and dialog logic, including follow-up questions and
+   basic robustness to prompt injection.
+5. Run a small pilot study, collect metrics (dropout, completion rate, answer quality).
+6. Evaluate the pilot and document limitations and future improvements.
+
+Coding goals for this repository:
+
+- Implement a minimal, working end-to-end system that supports one interview guide
+  and one LLM provider.
+- Keep the codebase small, readable, and aligned with the architecture described
+  in the thesis.
+
+---
+
+## Target interview format
+
+- Semi-structured interview in Russian.
+- Duration: 5–10 minutes.
+- Structure:
+  - intro: greeting, explanation of study purpose, informed consent;
+  - 2–3 thematic blocks with open questions;
+  - follow-up questions (probing) when needed;
+  - closing: short summary and thanks.
+
+Constraints:
+
+- Number of main questions per session: ~5–10 bot turns.
+- The bot must strictly follow the research protocol and must not drift into unrelated topics.
+- Bot is framed as a “digital interviewer / survey tool”, not as a general-purpose AI.
+
+---
+
+## Architecture (as designed in the thesis)
+
+We follow a modular architecture with three layers:
+
+1. Interface layer
+   - Telegram chat-bot (Telegram Bot API)
+   - Receives user messages and displays bot replies.
+
+2. Application layer (backend on FastAPI)
+   - HTTP API / Webhook
+     - Entry point for Telegram updates.
+   - Dialog Manager
+     - Tracks interview state (intro, block_1, block_2, closing, etc.).
+     - Decides next state and next type of action (main question, follow-up, closing).
+     - Enforces interview length and protocol constraints.
+   - Prompt Engine
+     - Builds system and assistant prompts based on:
+       - role of the bot (research interviewer),
+       - current interview block,
+       - recent dialog history,
+       - templates for main and follow-up questions.
+     - Includes simple filters against prompt injection
+       (ignore attempts to change the bot’s role, reset user instructions, etc.).
+   - LLM client
+     - Wraps one LLM provider API (e.g., GigaChat or YandexGPT).
+     - Exposes a single method like:
+       `generate_reply(system_prompt, messages)`.
+     - Handles auth, request/response formats, retries on obvious failures.
+   - Storage module
+     - Reads/writes sessions and messages from/to the database.
+     - Provides simple query helpers for logs and metrics.
+
+3. External services
+   - LLM API (one provider for MVP).
+   - Database (PostgreSQL in target setup, SQLite allowed for local dev).
+
+This architecture is already documented in the thesis (Section 2.3, Figure “Архитектура LLM‑бота‑интервьюера”). Code must follow this structure unless explicitly discussed.
+
+---
+
+## Data and logging requirements
+
+We must log data to support both qualitative and quantitative analysis.
+
+For each interview session, store:
+
+- `session_id`
+- anonymized respondent id / pseudonym (if available)
+- start and end timestamps
+- version of interview guide and prompt templates
+- LLM model / configuration used
+
+For each message, store:
+
+- session_id
+- role: `bot` / `user`
+- text
+- timestamp
+- optional technical metadata (e.g., language, channel)
+
+We also want to be able to compute:
+
+- completion rate (% of sessions that reach the final question),
+- dropout rate and step where dropout occurs,
+- session duration (time and number of turns),
+- average answer length,
+- number and types of follow-up questions.
+
+Do not log sensitive personal identifiers beyond what is absolutely necessary for
+the study. Keep logs suitable for further anonymization.
+
+---
+
+## Functional requirements
+
+The MVP bot must:
+
+- start an interview on `/start` (or equivalent trigger);
+- present intro text and ask for consent;
+- proceed through predefined blocks of open questions;
+- optionally ask follow-up questions based on user replies;
+- stop after the planned number of blocks or when the user clearly wants to stop;
+- handle simple off-topic or meta-questions politely and return to the guide;
+- write all messages and session metadata to the database.
+
+Non-functional requirements:
+
+- predictable, simple behavior; no “creative” features outside the interview;
+- robustness to API errors (timeouts, empty replies, bad responses);
+- clear separation between dialog logic and LLM calls;
+- ability to swap the LLM provider by changing only the LLM client module.
+
+---
+
+## LLM usage constraints
+
+- Single provider for MVP (e.g., GigaChat or YandexGPT).
+- Language: Russian, with occasional English fragments tolerated.
+- LLM must:
+  - follow system prompt and not act outside the role of research interviewer;
+  - avoid giving diagnoses, legal or medical advice, or value judgments;
+  - not ask for sensitive personal data beyond what is in the guide.
+
+Implementation rules:
+
+- All prompts should be stored in a dedicated module (`Prompt Engine` / config), not
+  scattered across the codebase.
+- System prompts must:
+  - define role, style, and forbidden behaviors;
+  - remind the model to respect interview length, topic, and protocol.
+
+---
+
+## Coding guidelines
+
+General:
+
+- Language: Python 3.11+.
+- Framework: FastAPI.
+- Database: PostgreSQL (SQLite for local dev and tests).
+- Interface: Telegram Bot API (polling or webhook; choose the simplest viable option).
+
+Structure (suggested):
+
+- `app/main.py` — FastAPI app, routes registration.
+- `app/api/` — HTTP endpoints (Telegram webhook/health).
+- `app/bot/` — Telegram adapter logic.
+- `app/services/dialog_manager.py` — state machine for interview.
+- `app/services/prompt_engine.py` — prompt construction and templates.
+- `app/services/llm_client.py` — LLM API wrapper.
+- `app/db/models.py` / `app/db/session.py` — DB models and connection.
+- `tests/` — minimal tests (health check, dialog manager transitions, storage).
+
+Style:
+
+- Prefer simple, explicit code over clever abstractions.
+- One responsibility per module.
+- Avoid adding new dependencies without clear need.
+- Avoid implementing full microservice architecture; everything can live in one
+  FastAPI app.
+
+---
+
+## Out of scope (do NOT implement unless explicitly asked)
+
+Do NOT implement in the MVP:
+
+- multi-tenant research management system;
+- web admin panel or researcher UI;
+- RAG/vector search, document ingestion, or complex retrieval;
+- voice input/output and speech recognition;
+- multi-language support beyond Russian (light English tolerance is fine);
+- advanced analytics dashboards.
+
+Also avoid:
+
+- tightly coupling dialog logic to a specific LLM provider;
+- storing raw personal identifiers without anonymization.
+
+---
+
+## Workflow with Claude Code
+
+When working on this repo:
+
+1. Always start with a short plan for the change.
+2. Make small, verifiable steps (single module or feature at a time).
+3. After each change:
+   - run the app and/or tests,
+   - fix runtime errors,
+   - summarize what changed.
+
+Priority order for implementation:
+
+1. Project skeleton + `/health`.
+2. Telegram adapter with simple echo or stubbed replies.
+3. Storage (sessions + messages).
+4. Dialog Manager (state machine, no LLM).
+5. Prompt Engine (templates, system prompt, follow-ups).
+6. LLM client.
+7. End-to-end flow for one interview guide.
+8. Error handling and basic prompt injection safeguards.
+9. Minimal tests.
+
+Follow these rules unless the maintainer explicitly changes `CLAUDE.md`.
