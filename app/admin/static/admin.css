@@ -1,0 +1,150 @@
+/* Web Admin — минимальная стилизация (M13) */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  margin: 0;
+  background: #f5f5f5;
+  color: #222;
+}
+
+/* ── Nav ── */
+nav {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  height: 52px;
+}
+nav a { color: #ccc; text-decoration: none; font-size: .9rem; }
+nav a:hover { color: #fff; }
+nav .brand { font-weight: 700; font-size: 1rem; color: #fff; margin-right: auto; }
+
+/* ── Layout ── */
+main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+
+h1 { font-size: 1.4rem; margin-bottom: 1.25rem; }
+
+/* ── Alerts ── */
+.alert { padding: .75rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+.alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.alert-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+
+/* ── Table ── */
+table { width: 100%; border-collapse: collapse; background: #fff;
+        border-radius: 8px; overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+thead { background: #f0f0f5; }
+th, td { padding: .6rem .9rem; text-align: left; font-size: .9rem;
+          border-bottom: 1px solid #e5e7eb; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #fafafa; }
+
+/* ── Status badges ── */
+.badge {
+  display: inline-block;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 600;
+}
+.badge-active   { background: #d1fae5; color: #065f46; }
+.badge-used     { background: #dbeafe; color: #1e40af; }
+.badge-draft    { background: #f3f4f6; color: #6b7280; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-block;
+  padding: .35rem .8rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: .85rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity .15s;
+}
+.btn:hover { opacity: .85; }
+.btn-primary  { background: #4f46e5; color: #fff; }
+.btn-secondary { background: #fff; color: #374151; border-color: #d1d5db; }
+.btn-danger   { background: #dc2626; color: #fff; }
+.btn-sm       { padding: .2rem .55rem; font-size: .78rem; }
+.btn-success  { background: #16a34a; color: #fff; }
+
+/* ── Forms ── */
+.form-section { background: #fff; border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,.08);
+                padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+.form-section h2 { font-size: 1rem; margin: 0 0 1rem; color: #374151; }
+
+.form-group { margin-bottom: 1rem; }
+label { display: block; font-size: .85rem; font-weight: 600;
+        color: #374151; margin-bottom: .3rem; }
+input[type="text"], textarea, select {
+  width: 100%; padding: .45rem .65rem;
+  border: 1px solid #d1d5db; border-radius: 6px;
+  font-size: .9rem; font-family: inherit;
+  transition: border-color .15s;
+}
+input[type="text"]:focus, textarea:focus {
+  outline: none; border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79,70,229,.12);
+}
+textarea { resize: vertical; min-height: 80px; }
+
+.form-hint { font-size: .78rem; color: #6b7280; margin-top: .25rem; }
+
+/* ── Question editor ── */
+#question-list { list-style: none; padding: 0; margin: 0 0 .75rem; }
+.question-item {
+  display: flex; align-items: flex-start; gap: .5rem;
+  padding: .6rem; background: #f9fafb;
+  border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: .5rem;
+}
+.question-item .q-num {
+  font-size: .78rem; font-weight: 700; color: #6b7280;
+  min-width: 1.5rem; padding-top: .55rem;
+}
+.question-item .q-id-badge {
+  font-size: .75rem; font-weight: 700; background: #e0e7ff;
+  color: #3730a3; border-radius: 4px; padding: .15rem .45rem;
+  white-space: nowrap; margin-top: .5rem;
+}
+.question-item textarea { flex: 1; min-height: 60px; }
+.question-item .q-actions { display: flex; flex-direction: column; gap: .25rem; }
+.question-item .q-actions button { width: 28px; height: 28px; padding: 0;
+  font-size: .9rem; line-height: 1; cursor: pointer;
+  border: 1px solid #d1d5db; border-radius: 4px; background: #fff; }
+.question-item .q-actions button:hover { background: #f3f4f6; }
+.locked-hint { font-size: .78rem; color: #92400e; background: #fef3c7;
+               border: 1px solid #fcd34d; border-radius: 6px;
+               padding: .45rem .75rem; margin-bottom: .75rem; }
+
+/* ── Preview ── */
+.preview-box {
+  background: #fff; border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  padding: 1.5rem; max-width: 620px;
+}
+.preview-box .section-label {
+  font-size: .75rem; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: .05em;
+  margin: 1rem 0 .3rem;
+}
+.preview-box .bubble {
+  background: #f0f0f5; border-radius: 12px 12px 12px 0;
+  padding: .7rem 1rem; white-space: pre-wrap;
+  font-size: .9rem; line-height: 1.5; max-width: 90%;
+}
+.preview-box hr { border: none; border-top: 1px solid #e5e7eb; margin: .75rem 0; }
+
+/* ── Form footer ── */
+.form-footer { display: flex; gap: .75rem; align-items: center;
+               padding-top: .5rem; }
+
+/* ── Header row ── */
+.page-header { display: flex; align-items: center; justify-content: space-between;
+               margin-bottom: 1.25rem; }
+.page-header h1 { margin: 0; }

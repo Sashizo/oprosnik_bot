@@ -1,0 +1,28 @@
+[Unit]
+Description=Interview Bot — Telegram Polling
+Documentation=https://github.com/<your-repo>
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/srv/interview
+
+# Читает переменные из .env; файл должен иметь права 600 (только владелец).
+EnvironmentFile=/srv/interview/.env
+
+ExecStart=/srv/interview/.venv/bin/python -m app.bot.run_polling
+
+# Перезапускать автоматически при сбое; ждать 10 с перед повтором.
+# RestartSec чуть больше, чем у web — чтобы не флудить Telegram API при loop crash.
+Restart=always
+RestartSec=10
+
+# Ограничения безопасности
+ProtectSystem=full
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ title }}</h1>
+  <a href="/admin/studies" class="btn btn-secondary">← К списку</a>
+</div>
+
+{% if errors %}
+<div class="alert alert-error">
+  <strong>Исправьте ошибки:</strong>
+  <ul style="margin:.4rem 0 0; padding-left:1.2rem;">
+    {% for e in errors %}
+    <li>{{ e }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post"
+      action="{% if study %}/admin/studies/{{ study.study_id }}/edit{% else %}/admin/studies/new{% endif %}">
+
+  <!-- ── Основное ──────────────────────────────────────────────── -->
+  <div class="form-section">
+    <h2>Основное</h2>
+
+    <div class="form-group">
+      <label for="title">Название <span style="color:#dc2626">*</span></label>
+      <input type="text" id="title" name="title"
+             value="{{ form.title or '' }}" required maxlength="200">
+    </div>
+
+    <div class="form-group">
+      <label for="description">Описание</label>
+      <textarea id="description" name="description" rows="3"
+                placeholder="Краткое описание исследования (необязательно)">{{ form.description or '' }}</textarea>
+    </div>
+  </div>
+
+  <!-- ── Вопросы ───────────────────────────────────────────────── -->
+  <div class="form-section">
+    <h2>Вопросы</h2>
+
+    {% if not allow_question_changes %}
+    <div class="locked-hint">
+      ⚠️ У этого исследования есть сессии. Можно редактировать только текст вопросов.
+      Порядок и идентификаторы заблокированы, чтобы не нарушить данные интервью.
+    </div>
+    {% endif %}
+
+    <ul id="question-list"
+        data-allow-changes="{{ 'true' if allow_question_changes else 'false' }}"
+        data-next-index="{{ questions|length + 1 }}">
+      {% for q in questions %}
+      <li class="question-item">
+        <span class="q-num">{{ loop.index }}.</span>
+        <span class="q-id-badge">{{ q.question_id }}</span>
+        <input type="hidden" name="q_id" value="{{ q.question_id }}">
+        <textarea name="q_text" rows="3" required
+                  placeholder="Текст вопроса…">{{ q.text }}</textarea>
+        {% if allow_question_changes %}
+        <div class="q-actions">
+          <button type="button" title="Вверх">↑</button>
+          <button type="button" title="Вниз">↓</button>
+          <button type="button" title="Удалить" style="color:#dc2626">✕</button>
+        </div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+
+    {% if allow_question_changes %}
+    <button type="button" id="add-question-btn" class="btn btn-secondary btn-sm">
+      + Добавить вопрос
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- ── Тексты бота ────────────────────────────────────────────── -->
+  <div class="form-section">
+    <h2>Тексты бота</h2>
+
+    <div class="form-group">
+      <label for="greeting">Приветствие <span style="color:#dc2626">*</span></label>
+      <textarea id="greeting" name="greeting" rows="4" required
+                placeholder="Текст, который видит респондент при /start">{{ form.greeting or '' }}</textarea>
+      <p class="form-hint">Первое сообщение — представление исследования и инструкция.</p>
+    </div>
+
+    <div class="form-group">
+      <label for="closing">Завершение <span style="color:#dc2626">*</span></label>
+      <textarea id="closing" name="closing" rows="3" required
+                placeholder="Финальное сообщение после последнего ответа">{{ form.closing or '' }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="redirect">Редирект при уклонении <span style="color:#dc2626">*</span></label>
+      <textarea id="redirect" name="redirect" rows="3" required
+                placeholder="Сообщение при слишком коротком / уклончивом ответе">{{ form.redirect or '' }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="help">Текст /help <span style="color:#dc2626">*</span></label>
+      <textarea id="help" name="help" rows="3" required
+                placeholder="Ответ на команду /help">{{ form.help or '' }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="already_done">Повторный вход <span style="color:#dc2626">*</span></label>
+      <textarea id="already_done" name="already_done" rows="3" required
+                placeholder="Сообщение если пользователь уже прошёл интервью">{{ form.already_done or '' }}</textarea>
+    </div>
+  </div>
+
+  <!-- ── Footer ──────────────────────────────────────────────────── -->
+  <div class="form-footer">
+    <button type="submit" class="btn btn-primary">💾 Сохранить</button>
+    {% if study %}
+    <a href="/admin/studies/{{ study.study_id }}/preview" class="btn btn-secondary">👁 Preview</a>
+    {% endif %}
+    <a href="/admin/studies" class="btn btn-secondary">Отмена</a>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="/admin/static/admin.js"></script>
+{% endblock %}

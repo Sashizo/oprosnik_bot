@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Preview — {{ study.title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Preview: {{ study.title }}</h1>
+  <div style="display:flex;gap:.5rem;">
+    <a href="/admin/studies/{{ study.study_id }}/edit" class="btn btn-secondary">✏️ Редактировать</a>
+    {% if not is_active %}
+    <form method="post" action="/admin/studies/{{ study.study_id }}/activate"
+          onsubmit="return confirm('Активировать исследование «{{ study.title }}»?');">
+      <button type="submit" class="btn btn-success">✅ Активировать</button>
+    </form>
+    {% else %}
+    <span class="badge badge-active" style="padding:.35rem .8rem;">✅ Сейчас активное</span>
+    {% endif %}
+    <a href="/admin/studies" class="btn btn-secondary">← К списку</a>
+  </div>
+</div>
+
+<div class="preview-box">
+  <p style="font-size:.8rem;color:#6b7280;margin:0 0 .75rem;">
+    Как увидит респондент ({{ questions|length }} вопр.)
+  </p>
+
+  <div class="section-label">Приветствие</div>
+  <div class="bubble">{{ study.texts.greeting }}</div>
+
+  <hr>
+
+  {% for q in questions %}
+  <div class="section-label">
+    Вопрос {{ loop.index }} из {{ questions|length }}
+    <span style="font-size:.7rem;color:#9ca3af;margin-left:.4rem;">{{ q.question_id }}</span>
+  </div>
+  <div class="bubble">{{ q.text }}</div>
+  {% if not loop.last %}<hr>{% endif %}
+  {% endfor %}
+
+  <hr>
+
+  <div class="section-label">Завершение</div>
+  <div class="bubble">{{ study.texts.closing }}</div>
+
+  <hr style="margin-top:1rem;">
+
+  <details style="margin-top:.5rem;">
+    <summary style="cursor:pointer;font-size:.85rem;color:#6b7280;">
+      Вспомогательные тексты (редирект, /help, повторный вход)
+    </summary>
+    <div style="margin-top:.75rem;">
+      <div class="section-label">Редирект при уклонении</div>
+      <div class="bubble" style="background:#fff3cd;">{{ study.texts.redirect }}</div>
+
+      <div class="section-label" style="margin-top:.75rem;">/help</div>
+      <div class="bubble">{{ study.texts.help }}</div>
+
+      <div class="section-label" style="margin-top:.75rem;">Повторный вход</div>
+      <div class="bubble">{{ study.texts.already_done }}</div>
+    </div>
+  </details>
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic-settings==2.9.1
+httpx==0.28.1
+pytest==8.4.0
+python-telegram-bot==21.10
+sqlalchemy==2.0.41
+openai
+gigachat
+jinja2
+python-multipart
