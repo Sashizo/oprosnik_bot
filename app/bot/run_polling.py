@@ -25,6 +25,56 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _build_all_engines(settings, study=None) -> tuple[dict, str]:
+    """Строит все доступные LLM-движки и возвращает (engines_dict, active_provider).
+
+    engines_dict: {provider_name: engine} — все движки, для которых есть ключи.
+    active_provider: провайдер из LLM_PROVIDER (если доступен), иначе первый доступный.
+    Всегда содержит хотя бы "static" как fallback.
+    """
+    from app.llm.engine import LLMPromptEngine
+    engines: dict = {}
+
+    if settings.llm_gigachat_credentials:
+        try:
+            from app.llm.client import GigaChatLLMClient
+            client = GigaChatLLMClient(
+                credentials=settings.llm_gigachat_credentials,
+                model=settings.llm_model,
+                timeout=settings.llm_gigachat_timeout,
+            )
+            engines["gigachat"] = LLMPromptEngine(client=client, study=study)
+            logger.info("Engine available: gigachat")
+        except Exception as e:
+            logger.warning("Failed to build gigachat engine: %s", e)
+
+    if settings.llm_cloudru_api_key:
+        try:
+            from app.llm.client import CloudRuLLMClient
+            client = CloudRuLLMClient(
+                api_key=settings.llm_cloudru_api_key,
+                model=settings.llm_cloudru_model,
+                timeout=settings.llm_timeout,
+            )
+            engines["cloudru"] = LLMPromptEngine(client=client, study=study)
+            logger.info("Engine available: cloudru (model=%s)", settings.llm_cloudru_model)
+        except Exception as e:
+            logger.warning("Failed to build cloudru engine: %s", e)
+
+    engines["static"] = StaticPromptEngine(study=study)
+
+    # Активный провайдер: из настроек, иначе первый LLM, иначе static.
+    preferred = settings.llm_provider.lower()
+    if preferred in engines:
+        active = preferred
+    else:
+        llm_providers = [p for p in engines if p != "static"]
+        active = llm_providers[0] if llm_providers else "static"
+
+    logger.info("Active LLM provider: %s", active)
+    return engines, active
+
+
 def _build_engine(settings, study=None) -> PromptEngine:
     """Выбирает Prompt Engine на основе конфига.
 
@@ -108,8 +158,8 @@ def main() -> None:
     else:
         logger.info("No active study — using legacy interview_script.py")
 
-    # Выбираем Prompt Engine на основе конфига; передаём active_study.
-    prompt_engine = _build_engine(settings, study=active_study)
+    # Строим все доступные LLM-движки; активный определяется из LLM_PROVIDER.
+    engines, active_provider = _build_all_engines(settings, study=active_study)
 
     # Читаем whitelist исследователей из settings.researcher_telegram_ids.
     # При пустой строке researcher-режим недоступен никому.
@@ -127,7 +177,8 @@ def main() -> None:
     app = build_application(
         token,
         store=store,
-        engine=prompt_engine,
+        engines=engines,
+        active_provider=active_provider,
         researcher_ids=researcher_ids,
         study_repo=study_repo,
         session_factory=session_factory,

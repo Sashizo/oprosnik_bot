@@ -33,12 +33,23 @@ R_ACTIVATE        = "r:activate"
 R_ACTIVATE_PREFIX = "r:activate:"   # r:activate:<study_id>
 R_STATS           = "r:stats"
 R_EXPORT          = "r:export"
+R_MODEL           = "r:model"
+R_MODEL_PREFIX    = "r:model:"      # r:model:gigachat, r:model:cloudru, r:model:static
+
+# Человекочитаемые названия провайдеров
+_PROVIDER_LABELS: dict[str, str] = {
+    "gigachat": "GigaChat (Sber)",
+    "cloudru":  "Qwen / Cloud.ru Foundation Models",
+    "static":   "Статичный режим (без LLM)",
+}
 
 
 # ── Keyboard builders ─────────────────────────────────────────────────────────
 
-def _kb_main() -> InlineKeyboardMarkup:
-    """Главное меню исследователя — 4 действия в 2 ряда."""
+def _kb_main(active_provider: str = "") -> InlineKeyboardMarkup:
+    """Главное меню исследователя — 5 действий в 3 ряда."""
+    label = _PROVIDER_LABELS.get(active_provider, active_provider)
+    model_btn_text = f"🤖 Модель: {label}" if active_provider else "🤖 Модель LLM"
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📋 Список",      callback_data=R_LIST),
@@ -47,6 +58,9 @@ def _kb_main() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("📊 Статистика", callback_data=R_STATS),
             InlineKeyboardButton("📤 Экспорт",    callback_data=R_EXPORT),
+        ],
+        [
+            InlineKeyboardButton(model_btn_text, callback_data=R_MODEL),
         ],
     ])
 
@@ -150,6 +164,65 @@ def _generate_csv_bytes(sessions: list) -> bytes:
 
 # ── Handler'ы ─────────────────────────────────────────────────────────────────
 
+async def _show_model_menu(query, context) -> None:
+    """Показывает меню выбора LLM-провайдера."""
+    engines: dict = context.bot_data.get("engines", {})
+    active_provider: str = context.bot_data.get("active_provider", "static")
+
+    if not engines:
+        await query.message.edit_text(
+            "❌ Нет доступных LLM-провайдеров.", reply_markup=_kb_back()
+        )
+        return
+
+    buttons = []
+    for provider in engines:
+        name = _PROVIDER_LABELS.get(provider, provider)
+        mark = "✅ " if provider == active_provider else ""
+        buttons.append([InlineKeyboardButton(
+            f"{mark}{name}",
+            callback_data=f"{R_MODEL_PREFIX}{provider}",
+        )])
+    buttons.append([InlineKeyboardButton("↩ Меню", callback_data=R_MENU)])
+
+    await query.message.edit_text(
+        "🤖 Выберите модель LLM для интервью:\n"
+        "(✅ — активная сейчас)",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+async def _do_switch_model(query, context, provider: str) -> None:
+    """Переключает активный LLM-провайдер без перезапуска бота."""
+    engines: dict = context.bot_data.get("engines", {})
+
+    if provider not in engines:
+        await query.message.edit_text(
+            f"❌ Провайдер «{provider}» недоступен.",
+            reply_markup=_kb_back(),
+        )
+        return
+
+    from app.services.dialog_manager import DialogManager
+    store = context.bot_data.get("store")
+    new_engine = engines[provider]
+    context.bot_data["dm"] = DialogManager(store=store, engine=new_engine)
+    context.bot_data["active_provider"] = provider
+
+    name = _PROVIDER_LABELS.get(provider, provider)
+    logger.info(
+        "[AUDIT] action=researcher_switch_model provider=%s user_id=%d",
+        provider, query.from_user.id,
+    )
+
+    await query.message.edit_text(
+        f"✅ Модель изменена на: {name}\n\n"
+        "Все новые сессии будут использовать эту модель.\n"
+        "Текущие незавершённые интервью продолжатся с новой моделью.",
+        reply_markup=_kb_back(),
+    )
+
+
 async def _cmd_researcher(update: Update, context) -> None:
     """Точка входа /researcher — показывает карточку + главное меню.
 
@@ -162,8 +235,9 @@ async def _cmd_researcher(update: Update, context) -> None:
     repo = context.bot_data.get("study_repo")
     active = repo.get_active() if repo is not None else None
     text = _fmt_active_card(active)
+    active_provider = context.bot_data.get("active_provider", "")
 
-    await update.message.reply_text(text, reply_markup=_kb_main())
+    await update.message.reply_text(text, reply_markup=_kb_main(active_provider))
 
 
 async def _handle_researcher_callback(update: Update, context) -> None:
@@ -188,7 +262,10 @@ async def _handle_researcher_callback(update: Update, context) -> None:
 
     if data == R_MENU:
         active = repo.get_active() if repo is not None else None
-        await query.message.edit_text(_fmt_active_card(active), reply_markup=_kb_main())
+        active_provider = context.bot_data.get("active_provider", "")
+        await query.message.edit_text(
+            _fmt_active_card(active), reply_markup=_kb_main(active_provider)
+        )
 
     elif data == R_LIST:
         await _show_list(query, repo)
@@ -205,6 +282,13 @@ async def _handle_researcher_callback(update: Update, context) -> None:
 
     elif data == R_EXPORT:
         await _do_export(query, context)
+
+    elif data == R_MODEL:
+        await _show_model_menu(query, context)
+
+    elif data.startswith(R_MODEL_PREFIX):
+        provider = data[len(R_MODEL_PREFIX):]
+        await _do_switch_model(query, context, provider)
 
     # else: неизвестный r:* action — молча игнорируем (forward compatibility)
 

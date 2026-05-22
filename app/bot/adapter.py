@@ -115,6 +115,8 @@ def build_application(
     token: str,
     store: SessionStore | None = None,
     engine: PromptEngine | None = None,
+    engines: dict | None = None,
+    active_provider: str = "static",
     researcher_ids: frozenset | None = None,
     study_repo=None,
     session_factory=None,
@@ -148,7 +150,14 @@ def build_application(
         .get_updates_request(get_updates_request)
         .build()
     )
-    app.bot_data["dm"] = DialogManager(store=store, engine=engine)
+
+    # Если передан dict движков — используем активный; иначе берём engine напрямую.
+    _engines = engines or {}
+    active_engine = _engines.get(active_provider) or engine
+    app.bot_data["dm"] = DialogManager(store=store, engine=active_engine)
+    app.bot_data["store"] = store          # нужен для пересборки DM при смене модели
+    app.bot_data["engines"] = _engines     # все доступные движки
+    app.bot_data["active_provider"] = active_provider
     app.bot_data["researcher_ids"] = researcher_ids or frozenset()
     app.bot_data["study_repo"] = study_repo
     app.bot_data["session_factory"] = session_factory
