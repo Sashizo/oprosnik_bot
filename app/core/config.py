@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"            # openai: gpt-4o-mini; gigachat: GigaChat
     llm_timeout: int = 30                     # секунды (только для OpenAI)
     llm_gigachat_credentials: str = ""        # GigaChat: Authorization Key из Sber Studio
+    llm_cloudru_api_key: str = ""             # Cloud.ru Foundation Models: API ключ
+    llm_cloudru_model: str = "Qwen/Qwen3.6-35B-A3B"  # модель из каталога Cloud.ru
     # Telegram user_id(s) с доступом к /researcher меню.
     # Формат: "123456789" или "123456789,987654321" (через запятую).
     # При пустой строке researcher-режим недоступен никому.

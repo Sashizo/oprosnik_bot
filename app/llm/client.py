@@ -46,6 +46,42 @@ class OpenAILLMClient:
         return response.choices[0].message.content.strip()
 
 
+class CloudRuLLMClient:
+    """Реализация LLMClient поверх Cloud.ru Foundation Models API.
+
+    API совместим с OpenAI (base_url: https://foundation-models.api.cloud.ru/v1).
+    Поддерживает любую модель из каталога Cloud.ru Foundation Models,
+    например: Qwen/Qwen3.6-35B-A3B, GigaChat-2-Max и др.
+
+    api_key — ключ из личного кабинета Cloud.ru (раздел Foundation Models → API ключи).
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "Qwen/Qwen3.6-35B-A3B",
+        timeout: int = 30,
+    ) -> None:
+        import openai  # lazy import
+        self._client = openai.OpenAI(
+            api_key=api_key,
+            base_url="https://foundation-models.api.cloud.ru/v1",
+            timeout=timeout,
+            http_client=httpx.Client(trust_env=False),
+        )
+        self._model = model
+
+    def complete(self, system: str, messages: list[dict[str, str]]) -> str:
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "system", "content": system}] + messages,
+            max_tokens=2500,
+            temperature=0.5,
+            top_p=0.95,
+        )
+        return response.choices[0].message.content.strip()
+
+
 class GigaChatLLMClient:
     """Реализация LLMClient поверх GigaChat API (Sber).
 

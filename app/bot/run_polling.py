@@ -63,6 +63,16 @@ def _build_engine(settings, study=None) -> PromptEngine:
         logger.info("LLM enabled (provider=openai, model=%s)", settings.llm_model)
         return LLMPromptEngine(client=client, study=study)
 
+    if provider == "cloudru" and settings.llm_cloudru_api_key:
+        from app.llm.client import CloudRuLLMClient
+        client = CloudRuLLMClient(
+            api_key=settings.llm_cloudru_api_key,
+            model=settings.llm_cloudru_model,
+            timeout=settings.llm_timeout,
+        )
+        logger.info("LLM enabled (provider=cloudru, model=%s)", settings.llm_cloudru_model)
+        return LLMPromptEngine(client=client, study=study)
+
     logger.info(
         "LLM not configured (provider=%s) — StaticPromptEngine (static mode)",
         settings.llm_provider,
