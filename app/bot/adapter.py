@@ -143,6 +143,7 @@ def build_application(
     app = (
         Application.builder()
         .token(token)
+        .base_url(settings.telegram_base_url)
         .request(request)
         .get_updates_request(get_updates_request)
         .build()

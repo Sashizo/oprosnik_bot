@@ -36,5 +36,11 @@ class Settings(BaseSettings):
     rate_limit_callbacks: int = 20     # callback'ов за rate_limit_window_seconds
     rate_limit_window_seconds: int = 60
 
+    # ── Telegram Bot API base URL ──────────────────────────────────────────────
+    # По умолчанию — официальный API Telegram.
+    # Для обхода блокировок (напр. через Cloudflare Worker) задай:
+    #   TELEGRAM_BASE_URL=https://your-worker.workers.dev/bot
+    telegram_base_url: str = "https://api.telegram.org/bot"
+
 
 settings = Settings()
