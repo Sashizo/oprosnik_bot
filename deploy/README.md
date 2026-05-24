@@ -129,14 +129,35 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 7. HTTPS (если есть домен)
+### 7. HTTPS через Duck DNS + Let's Encrypt (M17)
 
+Бесплатный вариант без покупки домена:
+
+**7.1 Зарегистрировать поддомен** (в браузере, без SSH):
+1. Зайти на https://www.duckdns.org → войти через Google
+2. Создать поддомен (например: `soc-oprosnik`) → указать IP сервера → «Update IP»
+3. Проверить: `nslookup soc-oprosnik.duckdns.org` → должен вернуть IP сервера
+
+**7.2 Открыть порт 443** в Cloud.ru Security Group (Входящий, TCP, 443, 0.0.0.0/0)
+
+**7.3 Установить certbot и получить сертификат** (SSH):
 ```bash
-sudo certbot --nginx -d <домен>
-# certbot настроит SSL и автообновление сертификата
-```
+sudo apt install -y certbot python3-certbot-nginx
 
-Без домена — работать по HTTP на IP (приемлемо для пилота).
+# Проверить, что port 80 отвечает через домен
+curl -I http://soc-oprosnik.duckdns.org/health   # → 200 OK
+
+# Получить сертификат (certbot перезапишет nginx-конфиг автоматически)
+sudo certbot --nginx -d soc-oprosnik.duckdns.org
+
+# Проверить HTTPS
+curl -I https://soc-oprosnik.duckdns.org/health  # → 200
+curl -I http://soc-oprosnik.duckdns.org/health   # → 301 redirect
+
+# Проверить автообновление
+sudo certbot renew --dry-run
+sudo systemctl status certbot.timer              # → active (waiting)
+```
 
 ---
 
@@ -174,17 +195,29 @@ sudo systemctl restart interview-web interview-bot
 
 ---
 
-## Backup БД
+## Backup БД (M17)
 
-Добавить в crontab пользователя deploy (`crontab -e`):
+Используется `sqlite3 .backup` — официальный hot backup API SQLite.
+Консистентен при активных записях (в отличие от `cp`).
+Хранит снимки за 14 дней.
 
+```bash
+# Создать директорию
+sudo mkdir -p /srv/interview/backups
+sudo chown user1:user1 /srv/interview/backups
+
+# Установить cron-job
+sudo cp /srv/interview/deploy/interview-backup.cron /etc/cron.d/interview-backup
+sudo chmod 644 /etc/cron.d/interview-backup
+
+# Проверить вручную (сразу, не ждать 03:00)
+sudo -u user1 /usr/bin/sqlite3 /srv/interview/interview.db \
+  ".backup '/srv/interview/backups/interview_test.db'"
+sqlite3 /srv/interview/backups/interview_test.db "PRAGMA integrity_check;"
+# → ok
 ```
-# Ежедневно в 3:00 — копия БД с ротацией 7 дней
-0 3 * * * cp /srv/interview/interview.db /srv/interview/backups/interview_$(date +\%Y\%m\%d).db
-0 3 * * * find /srv/interview/backups/ -name "*.db" -mtime +7 -delete
-```
 
-Создать папку заранее: `mkdir /srv/interview/backups`
+Backup запускается ежедневно в 03:00 UTC. Старые файлы (>14 дней) удаляются автоматически.
 
 ---
 

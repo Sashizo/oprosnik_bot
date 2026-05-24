@@ -50,7 +50,7 @@
 
 ### 2.3 Веб-административная панель
 
-Доступна по адресу `http://<IP>/admin` (HTTP Basic Auth):
+Доступна по адресу `https://soc-oprosnik.duckdns.org/admin` (HTTPS + Basic Auth):
 
 | Раздел | Функции |
 |---|---|
@@ -201,7 +201,8 @@ deploy/
 
 | Мера | Реализация |
 |---|---|
-| Аутентификация веб-панели | HTTP Basic Auth (`secrets.compare_digest`) |
+| Аутентификация веб-панели | HTTP Basic Auth (`secrets.compare_digest`) поверх HTTPS |
+| Шифрование транспорта | TLS 1.2/1.3 (Let's Encrypt / Duck DNS, автообновление через certbot) |
 | Rate limiting бота | Sliding window: 10 сообщений / 60 сек на пользователя |
 | Ограничение размера ввода | Сообщения > 2000 символов отклоняются |
 | Таймаут LLM | GigaChat: 30 сек, OpenAI: 30 сек |
@@ -218,13 +219,14 @@ deploy/
 - **Облако:** Cloud.ru (ru.AZ-2), Ubuntu 22.04 LTS
 - **VM:** 2 vCPU, 4 GB RAM, 20 GB SSD
 - **Прокси:** Cloudflare Worker (обход сетевых ограничений для Telegram API)
-- **Домен/IP:** `82.202.142.242` (HTTP, без HTTPS на текущем этапе)
+- **Домен:** `soc-oprosnik.duckdns.org` (бесплатный поддомен Duck DNS)
+- **HTTPS:** Let's Encrypt (Certbot), автообновление сертификата через systemd timer
 
 **CI/CD:**  
 Ручной деплой: `git pull && systemctl restart`. Полноценный CI/CD не реализован (вне рамок ВКР).
 
 **Бэкап:**  
-Ежедневное копирование SQLite-файла с ротацией 7 дней (cron).
+Ежедневный `sqlite3 .backup` (hot backup API) с ротацией 14 дней (cron), `/srv/interview/backups/`.
 
 ---
 
@@ -233,7 +235,6 @@ deploy/
 | Ограничение | Обоснование / Митигация |
 |---|---|
 | SQLite вместо PostgreSQL | Достаточно для нагрузки ВКР (< 100 сессий); переход на PostgreSQL — deferred |
-| HTTP без HTTPS | Нет домена; для пилотного исследования приемлемо |
 | In-memory rate limiter | Сбрасывается при перезапуске; Redis — deferred |
 | Один воркер uvicorn | Достаточно для единственного исследователя |
 | Нет CI/CD | Ручной деплой достаточен для одного разработчика |
@@ -250,7 +251,6 @@ deploy/
 5. **Экспорт в форматы** — Word, PDF, NVivo-совместимый формат
 6. **A/B тестирование сценариев** — сравнение двух вариантов гайда на одной выборке
 7. **Аудиоответы** — расшифровка голосовых сообщений через Whisper
-8. **HTTPS** — установка SSL-сертификата при наличии домена
 
 ---
 
@@ -259,8 +259,8 @@ deploy/
 | Ресурс | Адрес | Доступ |
 |---|---|---|
 | Telegram-бот | @soc_oprosnik_bot | Открытый — отправить `/start` |
-| Веб-панель | `http://82.202.142.242/admin` | Basic Auth (запросить у автора) |
-| Health check | `http://82.202.142.242/health` | Открытый |
+| Веб-панель | `https://soc-oprosnik.duckdns.org/admin` | Basic Auth (запросить у автора) |
+| Health check | `https://soc-oprosnik.duckdns.org/health` | Открытый |
 | Исходный код | github.com/Sashizo/oprosnik_bot | Публичный репозиторий |
 
 ---

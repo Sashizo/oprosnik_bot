@@ -1,0 +1,17 @@
+# Interview Bot — ежедневный backup SQLite (M17)
+#
+# Установка:
+#   sudo cp /srv/interview/deploy/interview-backup.cron /etc/cron.d/interview-backup
+#   sudo chmod 644 /etc/cron.d/interview-backup
+#
+# Предварительно создать директорию:
+#   sudo mkdir -p /srv/interview/backups
+#   sudo chown user1:user1 /srv/interview/backups
+#
+# Использует sqlite3 .backup (hot backup API) — консистентен даже при активных записях.
+# Хранит снимки за 14 дней; старше — удаляет автоматически.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+0 3 * * * user1 /usr/bin/sqlite3 /srv/interview/interview.db ".backup '/srv/interview/backups/interview_$(date +\%Y\%m\%d).db'" && find /srv/interview/backups/ -name "interview_*.db" -mtime +14 -delete
