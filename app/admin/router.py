@@ -13,17 +13,26 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import logging
+from datetime import date
 from typing import Annotated
 
-import logging
-
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
 from app.admin import templates
+from app.analysis.metrics import (
+    avg_answer_length,
+    completion_rate,
+    dropout_distribution,
+    duration_stats,
+)
 from app.core.config import settings
 from app.core.security import require_admin
 from app.db.database import build_engine, build_session_factory
+from app.db.repository import get_all_sessions
 from app.researcher.repository import StudyRepository
 from app.researcher.schema import QuestionDef, StudyDefinition, StudyTexts, validate
 
@@ -45,7 +54,14 @@ def get_study_repo() -> StudyRepository:
     return StudyRepository(sf)
 
 
+def get_session_factory():
+    """FastAPI dependency — создаёт session_factory для analytics-маршрутов."""
+    engine = build_engine(settings.database_url)
+    return build_session_factory(engine)
+
+
 RepoDep = Annotated[StudyRepository, Depends(get_study_repo)]
+SFDep = Annotated[object, Depends(get_session_factory)]
 
 
 # ── Вспомогательные функции ───────────────────────────────────────────────────
@@ -311,3 +327,114 @@ async def studies_activate(study_id: int, repo: RepoDep):
     repo.activate(study_id)
     logger.info("[AUDIT] action=admin_activate_study study_id=%d", study_id)
     return RedirectResponse(url="/admin/studies", status_code=303)
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+
+def _build_csv_bytes(sessions) -> bytes:
+    """Генерирует CSV в памяти и возвращает bytes.
+
+    Логика идентична app/analysis/export.to_csv(), но без записи на диск.
+    Импорт из analysis.export допустим — это не bot-слой.
+    """
+    from app.analysis.export import CSV_HEADERS, _build_q_map_cache, duration_minutes
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=CSV_HEADERS)
+    writer.writeheader()
+
+    q_maps = _build_q_map_cache(sessions)
+    for s in sessions:
+        q_map = q_maps[s.study_id]
+        dur = duration_minutes(s)
+        base = {
+            "session_id": s.session_id,
+            "user_id": s.user_id,
+            "started_at": s.started_at.isoformat(),
+            "finished_at": s.finished_at.isoformat() if s.finished_at else "",
+            "finished": s.finished,
+            "duration_minutes": dur if dur is not None else "",
+        }
+        if s.answers:
+            for a in s.answers:
+                writer.writerow({
+                    **base,
+                    "question_id": a.question_id,
+                    "question_text": q_map.get(a.question_id, ""),
+                    "answer_text": a.text,
+                    "answered_at": a.answered_at.isoformat(),
+                    "answer_length_chars": len(a.text),
+                })
+        else:
+            writer.writerow({
+                **base,
+                "question_id": "",
+                "question_text": "",
+                "answer_text": "",
+                "answered_at": "",
+                "answer_length_chars": "",
+            })
+
+    return buf.getvalue().encode("utf-8")
+
+
+@router.get("/analytics", response_class=HTMLResponse)
+async def analytics_page(request: Request, repo: RepoDep, sf: SFDep):
+    """Страница аналитики активного исследования."""
+    active_study = repo.get_active()
+
+    sessions = get_all_sessions(sf)
+
+    # Фильтруем по активному исследованию, если оно задано.
+    if active_study is not None:
+        sessions = [s for s in sessions if s.study_id == active_study.study_id]
+
+    total_sessions = len(sessions)
+    finished_sessions = sum(1 for s in sessions if s.finished)
+    completion_pct = round(completion_rate(sessions) * 100, 1)
+    dropout = dropout_distribution(sessions)
+    avg_lengths = avg_answer_length(sessions)
+    duration = duration_stats(sessions)
+
+    # Для таблицы avg_lengths — добавляем текст вопроса, если есть active_study.
+    q_text_map: dict[str, str] = {}
+    if active_study is not None:
+        q_text_map = {q.question_id: q.text for q in active_study.questions}
+
+    logger.info("[AUDIT] action=admin_view_analytics user=admin")
+    return templates.TemplateResponse(request, "analytics.html", {
+        "active_study": active_study,
+        "n_questions": len(active_study.questions) if active_study else 0,
+        "total_sessions": total_sessions,
+        "finished_sessions": finished_sessions,
+        "completion_pct": completion_pct,
+        "dropout": dropout,
+        "avg_lengths": avg_lengths,
+        "q_text_map": q_text_map,
+        "duration": duration,
+    })
+
+
+@router.get("/analytics/export")
+async def analytics_export(repo: RepoDep, sf: SFDep):
+    """Скачать все сессии активного исследования в CSV."""
+    active_study = repo.get_active()
+
+    sessions = get_all_sessions(sf)
+    if active_study is not None:
+        sessions = [s for s in sessions if s.study_id == active_study.study_id]
+
+    csv_bytes = _build_csv_bytes(sessions)
+    filename = f"export_{date.today().isoformat()}.csv"
+
+    logger.info(
+        "[AUDIT] action=admin_export_csv study_id=%s rows=%d",
+        active_study.study_id if active_study else "all",
+        len(sessions),
+    )
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

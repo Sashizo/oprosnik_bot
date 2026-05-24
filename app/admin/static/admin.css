@@ -148,3 +148,30 @@ textarea { resize: vertical; min-height: 80px; }
 .page-header { display: flex; align-items: center; justify-content: space-between;
                margin-bottom: 1.25rem; }
 .page-header h1 { margin: 0; }
+
+/* ── Analytics: summary cards ── */
+.summary-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.stat-card {
+  flex: 1 1 160px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  padding: 1rem 1.25rem;
+  text-align: center;
+}
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #4f46e5;
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: .8rem;
+  color: #6b7280;
+  margin-top: .35rem;
+}

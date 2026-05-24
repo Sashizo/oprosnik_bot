@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Аналитика{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📊 Аналитика</h1>
+  <a href="/admin/analytics/export" class="btn btn-secondary">📥 Скачать CSV</a>
+</div>
+
+{% if active_study %}
+  <p style="color:#6b7280; margin-bottom:1.5rem;">
+    Исследование: <strong>{{ active_study.title }}</strong>
+    ({{ n_questions }} вопросов)
+  </p>
+{% else %}
+  <div class="alert alert-error" style="margin-bottom:1.5rem;">
+    ⚠️ Нет активного исследования. Активируйте исследование в
+    <a href="/admin/studies">разделе «Исследования»</a>, чтобы видеть фильтрованную аналитику.
+    Ниже показаны данные по всем сессиям.
+  </div>
+{% endif %}
+
+<!-- Сводка -->
+<div class="summary-row">
+  <div class="stat-card">
+    <div class="stat-value">{{ total_sessions }}</div>
+    <div class="stat-label">Сессий всего</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ finished_sessions }}</div>
+    <div class="stat-label">Завершено</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ completion_pct }}%</div>
+    <div class="stat-label">Completion rate</div>
+  </div>
+</div>
+
+<!-- Dropout distribution -->
+<h2 style="margin-top:2rem; font-size:1.1rem;">Отказы по вопросам</h2>
+{% if dropout %}
+  <table>
+    <thead>
+      <tr>
+        <th>Вопрос №</th>
+        <th>Брошено на этом вопросе</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q_idx, count in dropout | dictsort %}
+        <tr>
+          <td>{{ q_idx + 1 }}</td>
+          <td>{{ count }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p style="color:#6b7280;">Незавершённых сессий нет — отличный результат!</p>
+{% endif %}
+
+<!-- Avg answer length -->
+<h2 style="margin-top:2rem; font-size:1.1rem;">Средняя длина ответов</h2>
+{% if avg_lengths %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID вопроса</th>
+        {% if q_text_map %}<th>Текст вопроса</th>{% endif %}
+        <th>Среднее (символов)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q_id, avg in avg_lengths | dictsort %}
+        <tr>
+          <td><code>{{ q_id }}</code></td>
+          {% if q_text_map %}
+            <td style="color:#374151; max-width:400px; word-break:break-word;">
+              {{ q_text_map.get(q_id, "") | truncate(80) }}
+            </td>
+          {% endif %}
+          <td>{{ avg }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p style="color:#6b7280;">Ответов пока нет.</p>
+{% endif %}
+
+<!-- Duration stats -->
+<h2 style="margin-top:2rem; font-size:1.1rem;">Длительность интервью</h2>
+{% if duration %}
+  <table>
+    <thead>
+      <tr>
+        <th>Минимум (мин)</th>
+        <th>Среднее (мин)</th>
+        <th>Максимум (мин)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ duration.min }}</td>
+        <td>{{ duration.avg }}</td>
+        <td>{{ duration.max }}</td>
+      </tr>
+    </tbody>
+  </table>
+{% else %}
+  <p style="color:#6b7280;">Нет завершённых сессий — данные о длительности недоступны.</p>
+{% endif %}
+
+<!-- Export button (bottom) -->
+<div style="margin-top:2rem; display:flex; align-items:center; gap:.75rem;">
+  <a href="/admin/analytics/export" class="btn btn-primary">📥 Скачать CSV</a>
+  <span style="color:#6b7280; font-size:.85rem;">
+    Экспортирует {{ total_sessions }} сессий в формате CSV
+  </span>
+</div>
+
+{% endblock %}
