@@ -443,8 +443,17 @@ def test_researcher_activate_is_audited(caplog):
     repo.activate.return_value = True
     repo.get_by_id.return_value = MagicMock(title="Test Study")
 
+    from app.services.prompt_engine import StaticPromptEngine
+    from app.services.dialog_manager import DialogManager
+    context = MagicMock()
+    context.bot_data = {
+        "engines": {"static": StaticPromptEngine()},
+        "active_provider": "static",
+        "store": MagicMock(),
+    }
+
     with caplog.at_level(logging.INFO, logger="app.bot.researcher_menu"):
-        asyncio.run(_do_activate(query, repo, "7"))
+        asyncio.run(_do_activate(query, context, repo, "7"))
 
     assert any("researcher_activate_study" in r.message for r in caplog.records)
 

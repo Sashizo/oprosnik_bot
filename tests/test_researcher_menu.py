@@ -206,12 +206,26 @@ def test_show_activate_menu_has_buttons():
 
 # ── _do_activate ──────────────────────────────────────────────────────────────
 
+def _make_context_with_engines():
+    """Минимальный context-мок для _do_activate (нужен для rebuild engines)."""
+    from app.services.prompt_engine import StaticPromptEngine
+    from app.services.dialog_manager import DialogManager
+    context = MagicMock()
+    context.bot_data = {
+        "engines": {"static": StaticPromptEngine()},
+        "active_provider": "static",
+        "store": MagicMock(),
+    }
+    return context
+
+
 def test_do_activate_success():
     query = _make_query()
+    context = _make_context_with_engines()
     repo = MagicMock()
     repo.activate.return_value = True
     repo.get_by_id.return_value = _make_study(study_id=7, title="Выбранное")
-    asyncio.run(_do_activate(query, repo, "7"))
+    asyncio.run(_do_activate(query, context, repo, "7"))
     repo.activate.assert_called_once_with(7)
     text = query.message.edit_text.call_args[0][0]
     assert "Выбранное" in text
@@ -220,17 +234,19 @@ def test_do_activate_success():
 
 def test_do_activate_not_found():
     query = _make_query()
+    context = _make_context_with_engines()
     repo = MagicMock()
     repo.activate.return_value = False
-    asyncio.run(_do_activate(query, repo, "999"))
+    asyncio.run(_do_activate(query, context, repo, "999"))
     text = query.message.edit_text.call_args[0][0]
     assert "не найдено" in text
 
 
 def test_do_activate_invalid_id():
     query = _make_query()
+    context = _make_context_with_engines()
     repo = MagicMock()
-    asyncio.run(_do_activate(query, repo, "abc"))
+    asyncio.run(_do_activate(query, context, repo, "abc"))
     text = query.message.edit_text.call_args[0][0]
     assert "Некорректный" in text
     repo.activate.assert_not_called()

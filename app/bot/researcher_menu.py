@@ -162,6 +162,42 @@ def _generate_csv_bytes(sessions: list) -> bytes:
     return buf.getvalue().encode("utf-8")
 
 
+# ── Перестройка движков при смене Study ──────────────────────────────────────
+
+def _rebuild_engines_with_study(context, study) -> None:
+    """Перестраивает все движки с новым исследованием и обновляет DialogManager.
+
+    Вызывается сразу после активации нового Study через researcher menu,
+    чтобы бот начал использовать новые вопросы без перезапуска процесса.
+    Клиенты LLM (GigaChat, CloudRu) переиспользуются — не нужна повторная
+    инициализация с credentials.
+    """
+    from app.llm.engine import LLMPromptEngine
+    from app.services.prompt_engine import StaticPromptEngine
+    from app.services.dialog_manager import DialogManager
+
+    old_engines: dict = context.bot_data.get("engines", {})
+    new_engines: dict = {}
+    for provider, eng in old_engines.items():
+        if isinstance(eng, LLMPromptEngine):
+            # Переиспользуем существующий LLM-клиент
+            new_engines[provider] = LLMPromptEngine(client=eng._client, study=study)
+        else:
+            new_engines[provider] = StaticPromptEngine(study=study)
+
+    context.bot_data["engines"] = new_engines
+
+    # Перестраиваем DialogManager с текущим активным провайдером
+    active_provider = context.bot_data.get("active_provider", "static")
+    store = context.bot_data.get("store")
+    active_engine = new_engines.get(active_provider) or new_engines.get("static")
+    context.bot_data["dm"] = DialogManager(store=store, engine=active_engine)
+    logger.info(
+        "[AUDIT] action=engines_rebuilt_after_activation study_id=%d provider=%s",
+        study.study_id, active_provider,
+    )
+
+
 # ── Handler'ы ─────────────────────────────────────────────────────────────────
 
 async def _show_model_menu(query, context) -> None:
@@ -275,7 +311,7 @@ async def _handle_researcher_callback(update: Update, context) -> None:
 
     elif data.startswith(R_ACTIVATE_PREFIX):
         study_id_str = data[len(R_ACTIVATE_PREFIX):]
-        await _do_activate(query, repo, study_id_str)
+        await _do_activate(query, context, repo, study_id_str)
 
     elif data == R_STATS:
         await _show_stats(query, repo, context)
@@ -353,8 +389,8 @@ async def _show_activate_menu(query, repo) -> None:
     )
 
 
-async def _do_activate(query, repo, study_id_str: str) -> None:
-    """Активирует исследование по id."""
+async def _do_activate(query, context, repo, study_id_str: str) -> None:
+    """Активирует исследование по id и немедленно применяет его в боте."""
     try:
         study_id = int(study_id_str)
     except ValueError:
@@ -377,9 +413,16 @@ async def _do_activate(query, repo, study_id_str: str) -> None:
         )
         sd = repo.get_by_id(study_id)
         title = sd.title if sd is not None else str(study_id)
+
+        # Перестраиваем движки в памяти — бот сразу переключается на новое
+        # исследование без перезапуска. Новые вопросы и тексты вступают в силу
+        # для всех сессий, начатых после этого момента.
+        if sd is not None:
+            _rebuild_engines_with_study(context, sd)
+
         text = (
             f"✅ Активировано: «{title}» (id: {study_id}).\n"
-            "Новые сессии будут использовать это исследование."
+            "Бот переключён на это исследование прямо сейчас."
         )
     else:
         text = f"❌ Исследование с id={study_id} не найдено."

@@ -337,7 +337,7 @@ def test_studies_activate_redirects():
     client = _make_client(repo)
     r = client.post("/admin/studies/1/activate")
     assert r.status_code == 303
-    assert r.headers["location"].endswith("/admin/studies")
+    assert "/admin/studies" in r.headers["location"]
     repo.activate.assert_called_once_with(1)
 
 

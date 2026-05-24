@@ -100,6 +100,7 @@ async def admin_root():
 @router.get("/studies", response_class=HTMLResponse)
 async def studies_list(request: Request, repo: RepoDep):
     """Список всех исследований с агрегированными данными."""
+    activated = request.query_params.get("activated") == "1"
     all_studies = repo.list_all()
     active_id = repo.get_active_orm_id()
 
@@ -126,7 +127,10 @@ async def studies_list(request: Request, repo: RepoDep):
             "status": status,
         })
 
-    return templates.TemplateResponse(request, "studies_list.html", {"rows": rows})
+    return templates.TemplateResponse(request, "studies_list.html", {
+        "rows": rows,
+        "activated": activated,
+    })
 
 
 @router.get("/studies/new", response_class=HTMLResponse)
@@ -323,10 +327,17 @@ async def studies_preview(request: Request, study_id: int, repo: RepoDep):
 
 @router.post("/studies/{study_id}/activate")
 async def studies_activate(study_id: int, repo: RepoDep):
-    """Активирует исследование; деактивирует остальные."""
+    """Активирует исследование; деактивирует остальные.
+
+    Обновляет БД, после чего редиректит на список с уведомлением.
+    Внимание: бот-процесс (interview-bot.service) читает активное исследование
+    только при запуске. Для немедленного применения используйте активацию
+    через Telegram /researcher → Активировать, либо перезапустите сервис:
+        sudo systemctl restart interview-bot
+    """
     repo.activate(study_id)
     logger.info("[AUDIT] action=admin_activate_study study_id=%d", study_id)
-    return RedirectResponse(url="/admin/studies", status_code=303)
+    return RedirectResponse(url="/admin/studies?activated=1", status_code=303)
 
 
 # ── Analytics ─────────────────────────────────────────────────────────────────

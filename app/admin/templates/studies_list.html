@@ -8,6 +8,15 @@
   <a href="/admin/studies/new" class="btn btn-primary">+ Создать исследование</a>
 </div>
 
+{% if activated %}
+<div class="notice notice-warning">
+  ✅ Исследование активировано в базе данных.<br>
+  ⚠️ <strong>Для применения изменений перезапустите бот-сервис:</strong>
+  <code>sudo systemctl restart interview-bot</code><br>
+  Либо активируйте исследование через Telegram: <code>/researcher → Активировать</code> — это применяется мгновенно.
+</div>
+{% endif %}
+
 {% if rows %}
 <table>
   <thead>
