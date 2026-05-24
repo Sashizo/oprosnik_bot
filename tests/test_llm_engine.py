@@ -74,6 +74,28 @@ def test_already_done_is_static_no_llm_call(fake_client):
     fake_client.complete.assert_not_called()
 
 
+def test_acknowledgment_passes_full_history_to_llm(fake_client):
+    """M19: _generate_acknowledgment() передаёт историю всех предыдущих Q&A в LLM.
+
+    LLM получает не только последний ответ, но и все предыдущие пары вопрос/ответ —
+    это позволяет генерировать контекстно-осведомлённые подтверждения.
+    """
+    engine = LLMPromptEngine(client=fake_client)
+    ctx = InterviewContext(
+        question_index=2,
+        previous_answers={
+            script.QUESTIONS[0].question_id: "ответ на первый вопрос",
+            script.QUESTIONS[1].question_id: "ответ на второй вопрос",
+        },
+    )
+    engine.question(ctx)
+    call_args = fake_client.complete.call_args
+    messages = call_args[1]["messages"]
+    all_content = " ".join(m["content"] for m in messages)
+    assert "ответ на первый вопрос" in all_content
+    assert "ответ на второй вопрос" in all_content
+
+
 # ── GigaChatLLMClient ────────────────────────────────────────────────────────
 
 @pytest.fixture
