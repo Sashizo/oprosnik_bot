@@ -14,4 +14,4 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-0 3 * * * user1 /usr/bin/sqlite3 /srv/interview/interview.db ".backup '/srv/interview/backups/interview_$(date +\%Y\%m\%d).db'" && find /srv/interview/backups/ -name "interview_*.db" -mtime +14 -delete
+0 3 * * * user1 /usr/bin/sqlite3 /srv/interview/interview.db ".backup '/srv/interview/backups/interview_$(date +\%Y\%m\%d).db'" && /usr/bin/sqlite3 /srv/interview/backups/interview_$(date +\%Y\%m\%d).db "PRAGMA integrity_check;" | grep -q "^ok$" && find /srv/interview/backups/ -name "interview_*.db" -mtime +14 -delete || logger -t interview-backup "BACKUP INTEGRITY CHECK FAILED for $(date +\%Y\%m\%d)"
