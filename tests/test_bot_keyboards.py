@@ -3,7 +3,9 @@
 from telegram import InlineKeyboardMarkup
 
 from app.bot.keyboards import (
+    CALLBACK_BEGIN,
     CALLBACK_RESTART,
+    keyboard_begin,
     keyboard_restart,
     keyboard_start,
 )
@@ -62,9 +64,10 @@ def test_keyboard_start_has_one_button():
 
 
 def test_keyboard_start_callback_data():
+    """keyboard_start() делегирует keyboard_begin() → использует CALLBACK_BEGIN."""
     markup = keyboard_start()
     button = markup.inline_keyboard[0][0]
-    assert button.callback_data == CALLBACK_RESTART
+    assert button.callback_data == CALLBACK_BEGIN
 
 
 def test_keyboard_start_button_text():
@@ -73,13 +76,31 @@ def test_keyboard_start_button_text():
     assert "Начать интервью" in button.text
 
 
-# ── keyboard_restart и keyboard_start используют один callback ────────────────
+# ── keyboard_begin / keyboard_start ──────────────────────────────────────────
 
-def test_both_keyboards_share_same_callback():
-    """Оба keyboard builder ведут к одному action:restart."""
+def test_callback_begin_value():
+    assert CALLBACK_BEGIN == "action:begin"
+
+
+def test_keyboard_begin_uses_callback_begin():
+    """keyboard_begin() использует CALLBACK_BEGIN."""
+    button = keyboard_begin().inline_keyboard[0][0]
+    assert button.callback_data == CALLBACK_BEGIN
+
+
+def test_keyboard_restart_uses_callback_restart():
+    """keyboard_restart() по-прежнему использует CALLBACK_RESTART."""
+    button = keyboard_restart().inline_keyboard[0][0]
+    assert button.callback_data == CALLBACK_RESTART
+
+
+def test_keyboard_restart_and_begin_use_different_callbacks():
+    """keyboard_restart и keyboard_begin ведут к разным action-константам."""
     cb_restart = keyboard_restart().inline_keyboard[0][0].callback_data
-    cb_start = keyboard_start().inline_keyboard[0][0].callback_data
-    assert cb_restart == cb_start == CALLBACK_RESTART
+    cb_begin = keyboard_begin().inline_keyboard[0][0].callback_data
+    assert cb_restart == CALLBACK_RESTART
+    assert cb_begin == CALLBACK_BEGIN
+    assert cb_restart != cb_begin
 
 
 # ── Независимость вызовов ─────────────────────────────────────────────────────

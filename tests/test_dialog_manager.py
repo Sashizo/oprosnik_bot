@@ -54,6 +54,39 @@ def test_finished_session_returns_already_done(dm):
     assert script.ALREADY_DONE in reply
 
 
+# ── begin() ──────────────────────────────────────────────────────────────────
+
+def test_begin_returns_first_question(dm):
+    """begin() возвращает первый вопрос без приветствия."""
+    result = dm.begin(user_id=1)
+    assert script.QUESTIONS[0].text in result.text
+    assert result.kind == "question"
+
+
+def test_begin_does_not_include_greeting(dm):
+    """begin() НЕ содержит текст GREETING (он уже был показан /start-экраном)."""
+    result = dm.begin(user_id=1)
+    # GREETING содержит «бот-интервьюер» — его не должно быть в begin()
+    assert "бот-интервьюер" not in result.text
+
+
+def test_begin_resets_finished_session(dm):
+    """begin() после завершённой сессии сбрасывает её и возвращает Q1."""
+    dm.start(user_id=1)
+    for msg in ["a1", "a2", "a3"]:
+        dm.process(1, msg)
+    result = dm.begin(user_id=1)
+    assert script.QUESTIONS[0].text in result.text
+    assert dm._store.get_or_create(1).finished is False
+
+
+def test_begin_answer_after_begin_advances_normally(dm):
+    """После begin() нормальный ответ продвигает интервью ко второму вопросу."""
+    dm.begin(user_id=1)
+    reply = dm.process(1, "мой ответ")
+    assert script.QUESTIONS[1].text in reply
+
+
 def test_start_resets_finished_session(dm):
     dm.start(user_id=1)
     for msg in ["a1", "a2", "a3"]:

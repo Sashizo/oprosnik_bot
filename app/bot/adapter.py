@@ -6,7 +6,7 @@ from telegram.constants import ChatAction
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
-from app.bot.keyboards import CALLBACK_RESTART, keyboard_restart, keyboard_start
+from app.bot.keyboards import CALLBACK_BEGIN, CALLBACK_RESTART, keyboard_begin, keyboard_restart, keyboard_start
 from app.bot.rate_limiter import InMemoryRateLimiter
 from app.bot.researcher_menu import register_researcher_handlers
 from app.core.config import settings
@@ -34,14 +34,13 @@ class _HTTPXRequestNoProxy(HTTPXRequest):
 
 
 async def _start(update: Update, context) -> None:
-    await context.bot.send_chat_action(
-        chat_id=update.effective_chat.id,
-        action=ChatAction.TYPING,
-    )
-    dm: DialogManager = context.bot_data["dm"]
-    result = dm.start(update.effective_user.id)
-    # При старте интервью кнопок нет — Q1 уже виден, пользователь пишет ответ.
-    await update.message.reply_text(result.text)
+    """Показывает приветственный экран с кнопкой «Начать интервью».
+
+    Сессия НЕ сбрасывается здесь — только когда пользователь нажмёт кнопку.
+    Это даёт пользователю возможность прочитать инструкцию перед стартом,
+    а не сразу получить первый вопрос.
+    """
+    await update.message.reply_text(script.WELCOME, reply_markup=keyboard_begin())
 
 
 async def _handle_text(update: Update, context) -> None:
@@ -100,13 +99,24 @@ async def _handle_callback(update: Update, context) -> None:
 
     await query.answer()  # убрать «часы» у кнопки
 
-    if query.data == CALLBACK_RESTART:
+    dm: DialogManager = context.bot_data["dm"]
+
+    if query.data == CALLBACK_BEGIN:
+        # Кнопка «Начать интервью» (первый запуск или из /help).
         await context.bot.send_chat_action(
             chat_id=update.effective_chat.id,
             action=ChatAction.TYPING,
         )
-        dm: DialogManager = context.bot_data["dm"]
-        result = dm.start(query.from_user.id)
+        result = dm.begin(query.from_user.id)
+        await query.message.reply_text(result.text)
+
+    elif query.data == CALLBACK_RESTART:
+        # Кнопка «Пройти ещё раз» (после closing / already_done).
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action=ChatAction.TYPING,
+        )
+        result = dm.begin(query.from_user.id)
         await query.message.reply_text(result.text)
     # else: неизвестный action — молча игнорируем (forward compatibility)
 

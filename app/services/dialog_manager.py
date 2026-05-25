@@ -54,11 +54,24 @@ class DialogManager:
         """Обрабатывает /start: сбрасывает сессию и сразу начинает интервью.
 
         Возвращает приветствие + первый вопрос единым сообщением.
+        Используется только напрямую (например, из тестов); в боте /start
+        сначала показывает приветственный экран, затем begin() стартует интервью.
         """
         self._store.reset(user_id)
         ctx = InterviewContext(question_index=0, previous_answers={})
         text = self._engine.intro() + "\n\n" + self._engine.question(ctx)
         return DialogResult(text=text, kind="question")
+
+    def begin(self, user_id: int) -> DialogResult:
+        """Сбрасывает сессию и возвращает первый вопрос без приветствия.
+
+        Вызывается при нажатии кнопки «Начать интервью» — после того как
+        пользователь уже видел приветственный экран (/start или /help).
+        Не дублирует intro(), чтобы не перегружать чат.
+        """
+        self._store.reset(user_id)
+        ctx = InterviewContext(question_index=0, previous_answers={})
+        return DialogResult(text=self._engine.question(ctx), kind="question")
 
     def process(self, user_id: int, text: str) -> DialogResult:
         """Обрабатывает текстовый ответ, возвращает следующий ответ бота."""

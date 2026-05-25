@@ -13,6 +13,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 # Формат "action:<name>" — простой и расширяемый.
 
 CALLBACK_RESTART = "action:restart"
+CALLBACK_BEGIN = "action:begin"
 
 
 # ── Keyboard builders ─────────────────────────────────────────────────────────
@@ -27,11 +28,16 @@ def keyboard_restart() -> InlineKeyboardMarkup:
     ]])
 
 
-def keyboard_start() -> InlineKeyboardMarkup:
-    """Кнопка «Начать интервью» — для /help.
+def keyboard_begin() -> InlineKeyboardMarkup:
+    """Кнопка «Начать интервью» — для приветственного экрана /start и /help.
 
-    Нажатие эквивалентно команде /start.
+    Нажатие сбрасывает сессию и показывает первый вопрос.
     """
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("▶ Начать интервью", callback_data=CALLBACK_RESTART)
+        InlineKeyboardButton("▶ Начать интервью", callback_data=CALLBACK_BEGIN)
     ]])
+
+
+def keyboard_start() -> InlineKeyboardMarkup:
+    """Алиас keyboard_begin() — для обратной совместимости."""
+    return keyboard_begin()
