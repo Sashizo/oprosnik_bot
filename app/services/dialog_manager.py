@@ -62,6 +62,15 @@ class DialogManager:
         text = self._engine.intro() + "\n\n" + self._engine.question(ctx)
         return DialogResult(text=text, kind="question")
 
+    def welcome(self) -> str:
+        """Приветственный текст для /start-экрана.
+
+        Берётся из engine.intro() — учитывает активное исследование
+        (study.texts.greeting при LLM/Static с study, иначе script.GREETING).
+        Не привязан к конкретному user_id: одинаков для всех пользователей.
+        """
+        return self._engine.intro() + "\n\nНажмите кнопку ниже, чтобы начать."
+
     def begin(self, user_id: int) -> DialogResult:
         """Сбрасывает сессию и возвращает первый вопрос без приветствия.
 

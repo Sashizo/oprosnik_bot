@@ -36,11 +36,12 @@ class _HTTPXRequestNoProxy(HTTPXRequest):
 async def _start(update: Update, context) -> None:
     """Показывает приветственный экран с кнопкой «Начать интервью».
 
+    Текст берётся через dm.welcome() → engine.intro(), что гарантирует
+    отображение актуального приветствия из активного исследования.
     Сессия НЕ сбрасывается здесь — только когда пользователь нажмёт кнопку.
-    Это даёт пользователю возможность прочитать инструкцию перед стартом,
-    а не сразу получить первый вопрос.
     """
-    await update.message.reply_text(script.WELCOME, reply_markup=keyboard_begin())
+    dm: DialogManager = context.bot_data["dm"]
+    await update.message.reply_text(dm.welcome(), reply_markup=keyboard_begin())
 
 
 async def _handle_text(update: Update, context) -> None:
