@@ -120,3 +120,50 @@ def test_is_off_topic_detection_phrases(dm):
         dm.start(user_id=99)
         reply = dm.process(99, phrase)
         assert script.QUESTIONS[0].text in reply, f"Не сработал редирект для: {phrase!r}"
+
+
+# ── Clarifying question ───────────────────────────────────────────────────────
+
+def test_clarifying_question_returns_clarify_kind(dm):
+    """Уточняющий вопрос → kind="clarify"."""
+    dm.start(user_id=1)
+    result = dm.process(1, "А вас интересуют только приложения или сайты тоже?")
+    assert result.kind == "clarify"
+
+
+def test_clarifying_question_repeats_current_question(dm):
+    """Ответ на уточняющий вопрос содержит текст текущего вопроса."""
+    dm.start(user_id=1)
+    result = dm.process(1, "Что вы имеете в виду под этим вопросом?")
+    assert script.QUESTIONS[0].text in result.text
+
+
+def test_clarifying_question_does_not_advance_index(dm):
+    """После уточняющего вопроса индекс не двигается."""
+    dm.start(user_id=1)
+    dm.process(1, "Можете уточнить, что нужно описать?")
+    session = dm._store.get_or_create(1)
+    assert session.current_question_index == 0
+
+
+def test_clarifying_question_answer_not_saved(dm):
+    """Уточняющий вопрос не сохраняется как ответ."""
+    dm.start(user_id=1)
+    dm.process(1, "А вас интересуют именно мобильные приложения?")
+    session = dm._store.get_or_create(1)
+    assert "q1" not in session.answers
+
+
+def test_valid_answer_after_clarification_advances(dm):
+    """После разъяснения нормальный ответ принимается и двигает интервью."""
+    dm.start(user_id=1)
+    dm.process(1, "Что именно вас интересует?")   # уточнение
+    reply = dm.process(1, "Использую ChatGPT для работы")  # ответ
+    assert script.QUESTIONS[1].text in reply
+
+
+def test_non_question_not_treated_as_clarification(dm):
+    """Обычный ответ без «?» не попадает в clarify-ветку."""
+    dm.start(user_id=1)
+    result = dm.process(1, "Я использую ChatGPT и Яндекс Алису")
+    assert result.kind == "question"   # следующий вопрос, не clarify

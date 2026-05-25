@@ -184,3 +184,79 @@ def test_is_off_topic_passes_question_context_to_llm(fake_client):
     call_args = fake_client.complete.call_args
     # текст вопроса должен быть в сообщении пользователя
     assert script.QUESTIONS[0].text in call_args[1]["messages"][0]["content"]
+
+
+# ── LLM classifier (is_clarifying_question) ──────────────────────────────────
+
+def test_is_clarifying_question_returns_true_when_llm_says_da(fake_client):
+    """LLM отвечает «ДА» → is_clarifying_question() = True."""
+    fake_client.complete.return_value = "ДА"
+    engine = LLMPromptEngine(client=fake_client)
+    ctx = InterviewContext(question_index=0, previous_answers={})
+    assert engine.is_clarifying_question("А вас интересуют только приложения?", ctx) is True
+
+
+def test_is_clarifying_question_returns_false_when_llm_says_net(fake_client):
+    """LLM отвечает «НЕТ» → is_clarifying_question() = False."""
+    fake_client.complete.return_value = "НЕТ"
+    engine = LLMPromptEngine(client=fake_client)
+    ctx = InterviewContext(question_index=0, previous_answers={})
+    assert engine.is_clarifying_question("Использую ChatGPT каждый день", ctx) is False
+
+
+def test_is_clarifying_question_falls_back_to_heuristic_on_exception():
+    """При сбое LLM — fallback на эвристику «заканчивается на ?»."""
+    failing = MagicMock()
+    failing.complete.side_effect = Exception("timeout")
+    engine = LLMPromptEngine(client=failing)
+    ctx = InterviewContext(question_index=0, previous_answers={})
+    assert engine.is_clarifying_question("Что именно вас интересует?", ctx) is True
+    assert engine.is_clarifying_question("Использую телефон каждый день", ctx) is False
+
+
+def test_is_clarifying_question_passes_question_text_to_llm(fake_client):
+    """Классификатор уточнений передаёт текст текущего вопроса в LLM."""
+    fake_client.complete.return_value = "НЕТ"
+    engine = LLMPromptEngine(client=fake_client)
+    ctx = InterviewContext(question_index=0, previous_answers={})
+    engine.is_clarifying_question("Что вы имеете в виду?", ctx)
+    call_args = fake_client.complete.call_args
+    assert script.QUESTIONS[0].text in call_args[1]["messages"][0]["content"]
+
+
+# ── LLM clarify ───────────────────────────────────────────────────────────────
+
+def test_clarify_returns_llm_text_plus_static_question(fake_client):
+    """clarify() = LLM-разъяснение + статический текст вопроса."""
+    fake_client.complete.return_value = "Нас интересует ваш личный опыт в любом формате."
+    engine = LLMPromptEngine(client=fake_client)
+    ctx = InterviewContext(
+        question_index=0,
+        previous_answers={},
+        last_user_text="Что вы имеете в виду?",
+    )
+    result = engine.clarify(ctx)
+    assert "Нас интересует ваш личный опыт" in result
+    assert script.QUESTIONS[0].text in result
+
+
+def test_clarify_falls_back_to_static_on_llm_exception():
+    """При сбое LLM clarify() возвращает статический fallback с текстом вопроса."""
+    failing = MagicMock()
+    failing.complete.side_effect = Exception("timeout")
+    engine = LLMPromptEngine(client=failing)
+    ctx = InterviewContext(question_index=0, previous_answers={}, last_user_text="?")
+    result = engine.clarify(ctx)
+    assert script.QUESTIONS[0].text in result
+
+
+def test_clarify_falls_back_when_guardrail_rejects_question_mark():
+    """Если LLM добавил «?» в разъяснение — guardrail отклоняет, возвращается fallback."""
+    bad_client = MagicMock()
+    bad_client.complete.return_value = "Хотите уточнить, что именно?"
+    engine = LLMPromptEngine(client=bad_client)
+    ctx = InterviewContext(question_index=0, previous_answers={}, last_user_text="?")
+    result = engine.clarify(ctx)
+    # guardrail отклонил (содержит "?") → fallback содержит статический вопрос
+    assert script.QUESTIONS[0].text in result
+    assert "Хотите уточнить" not in result

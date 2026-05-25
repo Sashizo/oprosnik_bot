@@ -5,7 +5,7 @@ from app.services.prompt_engine import InterviewContext, PromptEngine, StaticPro
 
 # ── DialogResult ──────────────────────────────────────────────────────────────
 
-_KINDS = frozenset({"question", "closing", "already_done", "redirect"})
+_KINDS = frozenset({"question", "closing", "already_done", "redirect", "clarify"})
 
 
 @dataclass
@@ -78,6 +78,11 @@ class DialogManager:
         # LLMPromptEngine использует LLM-классификатор, StaticPromptEngine — keyword-эвристику.
         if self._engine.is_off_topic(text, ctx_current):
             return DialogResult(text=self._engine.redirect(ctx_current), kind="redirect")
+
+        # Если участник задаёт уточняющий вопрос о формулировке — даём разъяснение
+        # и повторяем вопрос без продвижения и без сохранения ответа.
+        if self._engine.is_clarifying_question(text, ctx_current):
+            return DialogResult(text=self._engine.clarify(ctx_current), kind="clarify")
 
         # Сохраняем ответ на текущий вопрос.
         # question_id берётся из engine.questions() — единственный источник правды.

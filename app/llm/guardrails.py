@@ -166,6 +166,29 @@ def is_off_topic_response(text: str) -> bool:
     return False
 
 
+MAX_CLARIFY_CHARS = 400
+
+
+def validate_clarify(text: str) -> str:
+    """Валидация LLM-сгенерированного разъяснения уточняющего вопроса.
+
+    Правила: не пусто, не содержит "?" (LLM не должен задавать ответный вопрос
+    участнику), не длиннее MAX_CLARIFY_CHARS.
+    При отклонении возвращает "" — engine.clarify() вернёт статический fallback.
+    """
+    stripped = text.strip()
+    if not stripped:
+        logger.warning("[GUARDRAIL][CLARIFY_REJECTED] reason=empty")
+        return ""
+    if "?" in stripped:
+        logger.warning("[GUARDRAIL][CLARIFY_REJECTED] reason=contains_question text=%r", stripped[:120])
+        return ""
+    if len(stripped) > MAX_CLARIFY_CHARS:
+        logger.warning("[GUARDRAIL][CLARIFY_REJECTED] reason=too_long text=%r", stripped[:120])
+        return ""
+    return stripped
+
+
 def _log_reject(reason: str, text: str) -> None:
     logger.warning(
         "[GUARDRAIL][ACK_REJECTED] reason=%s text=%r",

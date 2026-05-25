@@ -1,7 +1,7 @@
 import logging
 
 from app.llm.client import LLMClient
-from app.llm.guardrails import flag_suspicious_user_input, is_off_topic_response, validate_ack, validate_closing
+from app.llm.guardrails import flag_suspicious_user_input, is_off_topic_response, validate_ack, validate_clarify, validate_closing
 from app.services import interview_script as script
 from app.services.prompt_engine import InterviewContext, StaticPromptEngine
 
@@ -43,6 +43,39 @@ _CLASSIFIER_SYSTEM_PROMPT = (
     "  Вопрос о мессенджерах — «я не хочу отвечать» → ДА\n\n"
     "Отвечай ТОЛЬКО одним словом: ДА или НЕТ. "
     "Если сомневаешься — отвечай НЕТ."
+)
+
+_CLARIFY_CLASSIFIER_PROMPT = (
+    "Ты помощник исследователя. В ходе структурированного интервью участник написал "
+    "сообщение. Определи: это уточняющий вопрос о формулировке вопроса интервью "
+    "или это ответ по существу?\n\n"
+    "УТОЧНЯЮЩИЙ ВОПРОС (ДА) — участник:\n"
+    "  • спрашивает, что именно имеется в виду под вопросом\n"
+    "  • просит пояснить термин или рамки вопроса\n"
+    "  • переспрашивает, что нужно описать\n"
+    "  Признак: сообщение заканчивается на «?»\n\n"
+    "ОТВЕТ ПО СУЩЕСТВУ (НЕТ) — участник отвечает на вопрос:\n"
+    "  • даже кратко, даже отрицательно, даже частично\n"
+    "  • даже если в ответе есть вопросительная интонация, но он содержит информацию\n\n"
+    "Примеры:\n"
+    "  «А вас интересуют только приложения или сайты тоже?» → ДА\n"
+    "  «Что вы имеете в виду под ИИ-инструментами?» → ДА\n"
+    "  «Я использую ChatGPT для работы» → НЕТ\n"
+    "  «Не пользуюсь ничем подобным» → НЕТ\n\n"
+    "Если сомневаешься — отвечай НЕТ.\n"
+    "Отвечай ТОЛЬКО одним словом: ДА или НЕТ."
+)
+
+_CLARIFY_SYSTEM_PROMPT = (
+    "Ты бот-интервьюер для академического исследования. "
+    "Участник задал уточняющий вопрос о формулировке вопроса интервью. "
+    "Напиши краткое (1–2 предложения) нейтральное разъяснение: "
+    "объясни, что имеется в виду, пригласи ответить в любом удобном формате. "
+    "Не раскрывай гипотезы исследования. Не давай оценок. "
+    "СТРОГО ЗАПРЕЩЕНО: задавать вопросы участнику, добавлять знак вопроса (?). "
+    "Только на русском языке. Без форматирования.\n\n"
+    "Пример: «Нас интересует ваш личный опыт в любом формате — "
+    "расскажите столько, сколько считаете нужным.»"
 )
 
 _CLOSING_SYSTEM_PROMPT = (
@@ -160,6 +193,58 @@ class LLMPromptEngine:
         except Exception as exc:
             logger.warning("LLM classifier failed (%s), falling back to keyword heuristic", exc)
             return is_off_topic_response(user_text)
+
+    def is_clarifying_question(self, user_text: str, ctx: InterviewContext) -> bool:
+        """LLM-классификатор: задаёт ли участник уточняющий вопрос о формулировке.
+
+        Fallback: эвристика «заканчивается на ?» при любой ошибке LLM.
+        """
+        try:
+            question_text = self._static.questions()[ctx.question_index].text
+            messages = [{
+                "role": "user",
+                "content": (
+                    f"Вопрос интервью: «{question_text}»\n"
+                    f"Сообщение участника: «{user_text}»\n"
+                    f"Это уточняющий вопрос о формулировке или ответ по существу?"
+                ),
+            }]
+            raw = self._client.complete(system=_CLARIFY_CLASSIFIER_PROMPT, messages=messages)
+            first_word = raw.strip().split()[0].upper().rstrip(".,!") if raw.strip() else ""
+            is_clarify = first_word == "ДА"
+            logger.info(
+                "[CLASSIFIER][CLARIFY] q=%d decision=%r text=%r",
+                ctx.question_index, first_word, user_text[:80],
+            )
+            return is_clarify
+        except Exception as exc:
+            logger.warning("LLM clarify classifier failed (%s), falling back to heuristic", exc)
+            return user_text.strip().endswith("?")
+
+    def clarify(self, ctx: InterviewContext) -> str:
+        """LLM генерирует нейтральное разъяснение + статический текст вопроса.
+
+        Guardrail: если LLM добавил «?» или ответ слишком длинный — fallback
+        на статическое разъяснение. Текст вопроса ВСЕГДА из StaticPromptEngine.
+        """
+        try:
+            question_text = self._static.questions()[ctx.question_index].text
+            last_q = ctx.last_user_text or ""
+            messages = [{
+                "role": "user",
+                "content": (
+                    f"Вопрос интервью: «{question_text}»\n"
+                    f"Уточняющий вопрос участника: «{last_q}»"
+                ),
+            }]
+            raw = self._client.complete(system=_CLARIFY_SYSTEM_PROMPT, messages=messages)
+            clarification = validate_clarify(raw)
+            if clarification:
+                return f"{clarification}\n\n{question_text}"
+            logger.warning("LLM clarification rejected by guardrail, using static fallback")
+        except Exception as exc:
+            logger.warning("LLM clarification failed (%s), using static fallback", exc)
+        return self._static.clarify(ctx)
 
     def questions(self) -> tuple:
         """Делегирует в StaticPromptEngine — единственный источник правды по вопросам."""

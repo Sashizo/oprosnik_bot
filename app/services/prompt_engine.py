@@ -36,6 +36,8 @@ class PromptEngine(Protocol):
     def already_done(self) -> str: ...
     def redirect(self, ctx: InterviewContext) -> str: ...
     def is_off_topic(self, user_text: str, ctx: InterviewContext) -> bool: ...
+    def is_clarifying_question(self, user_text: str, ctx: InterviewContext) -> bool: ...
+    def clarify(self, ctx: InterviewContext) -> str: ...
     def build_system_prompt(self) -> str: ...
     def questions(self) -> tuple: ...
     def total_questions(self) -> int: ...
@@ -122,6 +124,28 @@ class StaticPromptEngine:
     def is_off_topic(self, user_text: str, ctx: InterviewContext) -> bool:
         """Keyword-эвристика: используется в StaticPromptEngine и как fallback в LLMPromptEngine."""
         return is_off_topic_response(user_text)
+
+    def is_clarifying_question(self, user_text: str, ctx: InterviewContext) -> bool:
+        """Эвристика: True если участник задаёт уточняющий вопрос о формулировке.
+
+        Признак: сообщение заканчивается на «?» после strip().
+        В LLMPromptEngine заменяется LLM-классификатором с этой эвристикой как fallback.
+        """
+        return user_text.strip().endswith("?")
+
+    def clarify(self, ctx: InterviewContext) -> str:
+        """Нейтральное разъяснение + повтор текущего вопроса (без продвижения).
+
+        Используется когда участник просит пояснить формулировку вопроса.
+        Научная валидность сохранена: текст вопроса берётся из скрипта дословно.
+        """
+        qs = self.questions()
+        q = qs[ctx.question_index]
+        return (
+            "Пожалуйста, ответьте так, как вам удобно — "
+            "здесь нет правильных или неправильных ответов.\n\n"
+            + q.text
+        )
 
     def build_system_prompt(self) -> str:
         """Системный промпт для LLM-клиента.
