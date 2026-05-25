@@ -2,20 +2,20 @@
 
 **Проект:** Выпускная квалификационная работа  
 **Тема:** Разработка LLM-бота для качественных исследований  
-**Статус:** MVP развёрнут и доступен для тестирования  
+**Статус:** Система развёрнута, протестирована и готова к проведению полевого исследования
 
 ---
 
 ## 1. Назначение системы
 
-Система представляет собой инструмент для автоматизированного проведения качественных исследований (глубинных интервью) с использованием Telegram-бота и больших языковых моделей (LLM).
+Система автоматизирует проведение структурированных качественных интервью через Telegram. Бот последовательно задаёт вопросы сценария, генерирует контекстно-осведомлённые подтверждения ответов с помощью LLM, распознаёт уклонение и уточняющие вопросы от респондентов, а результаты накапливаются в базе данных для последующего анализа.
 
 **Проблема, которую решает система:**  
-Классическое качественное интервью требует участия живого интервьюера, что ограничивает масштабируемость исследования и вносит интервьюерский эффект (влияние личности исследователя на ответы респондента). Бот позволяет проводить структурированные интервью в асинхронном режиме — респондент отвечает в удобное время, а LLM адаптирует уточняющие вопросы под контекст ответов.
+Классическое качественное интервью требует участия живого интервьюера, ограничивая масштабируемость и внося интервьюерский эффект. Бот проводит структурированные интервью в асинхронном режиме — респондент отвечает в удобное время, LLM обеспечивает естественность диалога, а данные поступают исследователю без ручной обработки.
 
 **Целевые пользователи:**
-- **Респонденты** — участники исследования, общаются с ботом в Telegram
-- **Исследователь** — управляет исследованиями через Telegram-меню и веб-интерфейс
+- **Респонденты** — проходят интервью в Telegram
+- **Исследователь** — управляет исследованиями через Telegram-меню и веб-панель, анализирует результаты
 
 ---
 
@@ -23,54 +23,67 @@
 
 ### 2.1 Для респондентов (Telegram-бот)
 
-| Функция | Описание |
-|---|---|
-| Прохождение интервью | Последовательные вопросы по заданному сценарию |
-| LLM-уточнения | Бот задаёт уточняющие вопросы на основе ответа респондента |
-| Fallback-режим | При недоступности LLM — статичные вопросы из скрипта |
-| Возобновление сессии | Респондент может продолжить прерванное интервью |
-| Мультиязычность | Интерфейс на русском языке |
-
 **Сценарий взаимодействия:**
 ```
-Респондент → /start → Вопрос 1 → Ответ → [LLM генерирует уточнение] → 
-Уточняющий вопрос → Ответ → Вопрос 2 → ... → Завершение
+/start → Приветственный экран + кнопка «▶ Начать интервью»
+       → [кнопка нажата] → Вопрос 1
+       → Ответ → LLM-подтверждение + Вопрос 2
+       → Ответ → LLM-подтверждение + Вопрос 3
+       → Ответ → LLM-завершение → кнопка «🔄 Пройти ещё раз»
 ```
+
+| Функция | Описание |
+|---|---|
+| Двухшаговый старт | `/start` показывает приветствие из активного исследования и кнопку «Начать интервью» — без немедленного сброса сессии |
+| Последовательные вопросы | Все вопросы берутся из активного сценария исследования |
+| Прогресс-метка | Каждый вопрос сопровождается меткой «Вопрос N из M» |
+| LLM-подтверждение | После каждого ответа LLM генерирует 1–2 нейтральных предложения, опционально отражая контекст предыдущих ответов |
+| LLM-завершение | После последнего ответа LLM формирует персонализированное финальное сообщение |
+| Распознавание уклонения | LLM-классификатор (ДА/НЕТ) + keyword-эвристика определяют нерелевантные ответы; бот мягко возвращает к текущему вопросу |
+| Распознавание уточнений | LLM-классификатор выявляет вопросы о формулировке («?»); бот даёт пояснение без продвижения вперёд |
+| Fallback-режим | При недоступности LLM — статичные тексты из скрипта; интервью не прерывается |
+| Возобновление сессии | Незавершённое интервью сохраняется в БД; можно продолжить позже |
+| Rate limiting | Не более 10 сообщений за 60 сек на пользователя; мягкое предупреждение без блокировки |
 
 ### 2.2 Для исследователя (Telegram-меню)
 
-Доступно командой `/researcher` пользователям из whitelist:
+Доступно командой `/researcher` пользователям из whitelist (`RESEARCHER_TELEGRAM_IDS`):
 
 | Функция | Описание |
 |---|---|
-| Просмотр списка исследований | Все созданные Study с их статусами |
-| Активация исследования | Переключение активного сценария |
+| Список исследований | Все созданные Study с их статусами |
+| Активация исследования | Переключение активного сценария — применяется **мгновенно**, без перезапуска бота |
 | Статистика | Количество завершённых сессий |
-| Экспорт данных | Выгрузка CSV с ответами прямо в Telegram |
+| Экспорт данных | CSV с ответами всех респондентов прямо в Telegram |
+| Переключение LLM | Смена провайдера (GigaChat / OpenAI / статичный режим) в runtime |
 
 ### 2.3 Веб-административная панель
 
 Доступна по адресу `https://soc-oprosnik.duckdns.org/admin` (HTTPS + Basic Auth):
 
-| Раздел | Функции |
+| Маршрут | Функции |
 |---|---|
 | `/admin/studies` | Список всех исследований, создание нового |
-| `/admin/studies/{id}` | Просмотр, редактирование, активация Study |
-| `/admin/studies/new` | Загрузка сценария интервью через YAML |
-| `/admin/sessions` | Список всех сессий респондентов |
-| `/admin/sessions/{id}` | Полная история диалога одного респондента |
-| `/health` | Статус сервиса (для мониторинга) |
+| `/admin/studies/new` | Создание сценария через веб-форму (YAML-формат вопросов) |
+| `/admin/studies/{id}` | Просмотр, редактирование, активация исследования |
+| `/admin/analytics` | Страница метрик: completion rate, dropout, средняя длина ответов, продолжительность |
+| `/admin/analytics/export` | Скачать CSV со всеми ответами |
+| `/admin/sessions` | Список всех сессий респондентов (с пагинацией) |
+| `/admin/sessions/{id}` | Полная история диалога одного респондента (пары вопрос/ответ) |
+| `/health` | JSON `{"status":"ok"}` для мониторинга |
 
 **Формат сценария интервью (YAML):**
 ```yaml
 title: "Исследование пользовательского опыта"
-description: "Качественное интервью о цифровых сервисах"
+description: "Качественное интервью об ИИ-инструментах"
 questions:
   - id: q1
-    text: "Расскажите, как вы обычно выбираете новые приложения?"
+    text: "Расскажите, как ИИ-инструменты вошли в вашу повседневную жизнь."
   - id: q2
-    text: "Какие факторы для вас наиболее важны при первом использовании?"
+    text: "Какие задачи вы решаете с их помощью чаще всего?"
 ```
+
+При активации исследования через веб-панель на странице появляется предупреждение с инструкцией по перезапуску бота. Активация через Telegram-меню (`/researcher`) применяется мгновенно без перезапуска.
 
 ---
 
@@ -87,14 +100,14 @@ questions:
     ▼
 [Cloud.ru VM: Ubuntu 22.04]
     │
-    ├─► [nginx :80]  ← reverse proxy
+    ├─► [nginx :443 / :80]  ← TLS termination, HTTP→HTTPS redirect
     │       │
     │       ▼
     │   [uvicorn :8000]  ← FastAPI web-admin   (systemd: interview-web.service)
     │
-    └─► [Python polling]  ← Telegram бот       (systemd: interview-bot.service)
-    
-Оба процесса используют общий файл:
+    └─► [Python polling]  ← Telegram-бот       (systemd: interview-bot.service)
+
+Оба процесса работают с общим файлом:
     /srv/interview/interview.db  (SQLite + WAL mode)
 ```
 
@@ -107,45 +120,63 @@ questions:
 | ASGI-сервер | Uvicorn | Запуск FastAPI в продакшене |
 | База данных | SQLite (WAL mode) | Хранение сессий и исследований |
 | ORM | SQLAlchemy 2.x | Работа с БД |
-| LLM-провайдер | GigaChat (Sber) / OpenAI | Генерация уточняющих вопросов |
+| LLM-провайдер | GigaChat (Sber) / OpenAI | Генерация подтверждений, классификация |
 | Прокси | Cloudflare Worker | Обход сетевых ограничений |
-| Обратный прокси | nginx | Роутинг HTTP-трафика |
-| Управление процессами | systemd | Автозапуск и мониторинг сервисов |
+| Обратный прокси | nginx | Роутинг, TLS termination |
+| Управление процессами | systemd | Автозапуск, Restart=always |
+| CI | GitHub Actions | Автозапуск pytest на каждый push/PR |
 
 ### 3.3 Структура кода
 
 ```
 app/
 ├── core/
-│   ├── config.py          # Конфигурация через .env (Pydantic Settings)
-│   └── security.py        # HTTP Basic Auth для веб-панели
+│   ├── config.py           # Конфигурация через .env (Pydantic Settings)
+│   └── security.py         # HTTP Basic Auth для веб-панели
 ├── bot/
-│   ├── adapter.py         # Telegram Application builder, обработчики
-│   ├── rate_limiter.py    # Защита от спама (sliding window)
-│   └── researcher_menu.py # Меню исследователя в Telegram
+│   ├── adapter.py          # Telegram Application builder, обработчики
+│   ├── keyboards.py        # InlineKeyboard builders (CALLBACK_BEGIN, CALLBACK_RESTART)
+│   ├── rate_limiter.py     # Защита от спама (sliding window)
+│   └── researcher_menu.py  # Меню исследователя в Telegram
 ├── services/
-│   ├── dialog_manager.py  # Управление ходом интервью
-│   ├── prompt_engine.py   # Интерфейс к LLM (статичный / LLM-режим)
-│   └── session_store.py   # Абстракция хранилища сессий
+│   ├── dialog_manager.py   # Конечный автомат диалога (welcome/begin/process)
+│   ├── prompt_engine.py    # PromptEngine Protocol + StaticPromptEngine
+│   └── session_store.py    # Protocol SessionStore + InMemorySessionStore
 ├── llm/
-│   ├── client.py          # Клиенты GigaChat и OpenAI
-│   └── engine.py          # LLM Prompt Engine
+│   ├── client.py           # Клиенты GigaChat и OpenAI (LLMClient Protocol)
+│   ├── engine.py           # LLMPromptEngine: acknowledgment, closing, classifiers
+│   └── guardrails.py       # Валидация LLM-вывода (validate_ack, validate_closing, validate_clarify)
 ├── db/
-│   ├── database.py        # Инициализация БД, миграции
-│   ├── models.py          # SQLAlchemy модели
-│   └── repository.py      # CRUD операции
+│   ├── database.py         # Инициализация БД, build_engine, init_db
+│   ├── models.py           # SQLAlchemy ORM-модели (Study, InterviewSession, Answer)
+│   └── repository.py       # CRUD: SQLiteSessionStore, get_all_sessions
+├── analysis/
+│   ├── metrics.py          # completion_rate, dropout_distribution, avg_answer_length, duration_stats
+│   └── export.py           # SessionRecord, AnswerRecord, to_csv
 ├── researcher/
-│   ├── models.py          # Модель Study (исследование)
-│   └── repository.py      # StudyRepository
+│   ├── models.py           # StudyDefinition, QuestionDef, StudyTexts (Pydantic)
+│   └── repository.py       # StudyRepository (CRUD для Study)
 ├── admin/
-│   └── router.py          # FastAPI роуты /admin/*
-└── main.py                # FastAPI app, lifespan, health endpoint
+│   ├── router.py           # FastAPI роуты /admin/*, /health
+│   ├── templates/          # Jinja2 шаблоны (base, studies, analytics, sessions)
+│   └── static/             # admin.css
+└── main.py                 # FastAPI app, lifespan, глобальный error handler
 
 deploy/
-├── interview-web.service  # systemd unit для uvicorn
-├── interview-bot.service  # systemd unit для бота
-├── nginx.conf             # Конфиг nginx
-└── README.md              # Инструкция по деплою
+├── interview-web.service   # systemd unit для uvicorn
+├── interview-bot.service   # systemd unit для бота
+├── nginx.conf              # Конфиг nginx (HTTPS + proxy_pass)
+├── interview-backup.cron   # Ежедневный backup + PRAGMA integrity_check
+├── RUNBOOK.md              # Операционная инструкция: deploy, rollback, диагностика
+└── OPS_REFERENCE.md        # Шпаргалка: journalctl, nginx, certbot, SQLite
+
+scripts/
+└── smoke_check.sh          # Post-deploy проверка: systemd + /health + /admin + TLS
+
+.github/
+└── workflows/tests.yml     # CI: pytest на каждый push и PR в main
+
+tests/                      # 249 тестов (pytest)
 ```
 
 ---
@@ -153,108 +184,185 @@ deploy/
 ## 4. Модель данных
 
 ### Study (исследование)
+
 | Поле | Тип | Описание |
 |---|---|---|
-| study_id | INTEGER PK | Идентификатор |
+| id | INTEGER PK | Идентификатор |
 | title | TEXT | Название исследования |
 | description | TEXT | Описание |
-| questions | JSON | Список вопросов |
-| is_active | BOOLEAN | Активное исследование |
+| questions_json | TEXT | JSON-массив вопросов (question_id + text) |
+| texts_json | TEXT | JSON тексты: greeting, closing, already_done, redirect |
+| is_active | BOOLEAN | Активное исследование (только одно одновременно) |
 | created_at | DATETIME | Дата создания |
 
 ### InterviewSession (сессия)
+
 | Поле | Тип | Описание |
 |---|---|---|
-| session_id | INTEGER PK | Идентификатор |
-| telegram_user_id | INTEGER | ID пользователя в Telegram |
-| study_id | INTEGER FK | Связь с исследованием |
-| answers | JSON | Ответы респондента |
-| current_question | INTEGER | Текущий вопрос |
-| status | TEXT | waiting / in_progress / done |
+| id | INTEGER PK | Идентификатор |
+| user_id | INTEGER | Telegram user_id |
+| study_id | INTEGER FK | Привязка к исследованию |
+| current_question_index | INTEGER | Индекс текущего вопроса (0-based) |
+| finished | BOOLEAN | Интервью завершено |
 | started_at | DATETIME | Начало сессии |
-| finished_at | DATETIME | Завершение сессии |
+| finished_at | DATETIME | Завершение (NULL если не завершено) |
+
+### Answer (ответ)
+
+| Поле | Тип | Описание |
+|---|---|---|
+| id | INTEGER PK | Идентификатор |
+| session_id | INTEGER FK | Привязка к сессии |
+| question_id | TEXT | ID вопроса (q1, q2, ...) |
+| text | TEXT | Текст ответа |
+| answered_at | DATETIME | Время ответа |
 
 ---
 
 ## 5. LLM-интеграция
 
-### Режимы работы
+### Архитектура LLM-слоя
 
-**LLM-режим (основной):**  
-После каждого ответа респондента бот обращается к GigaChat с промптом, содержащим вопрос и ответ. LLM генерирует 1–2 уточняющих вопроса или подтверждает переход к следующему пункту.
+Система построена на двух реализациях Protocol `PromptEngine`:
 
-**Статичный режим (fallback):**  
-При недоступности LLM или отсутствии API-ключа система переходит к заранее написанному скрипту. Это обеспечивает бесперебойную работу.
+**`StaticPromptEngine`** — детерминированный режим:
+- Тексты берутся из `StudyDefinition` (если исследование активно) или из `interview_script.py`
+- Off-topic: keyword-эвристика
+- Уточняющий вопрос: проверка окончания на «?»
+- Используется как fallback при недоступности LLM
+
+**`LLMPromptEngine`** — режим с языковой моделью:
+- Wraps `StaticPromptEngine` для статичных текстов; LLM добавляет только динамические элементы
+- Acknowledgment: 1–2 нейтральных предложения с учётом истории Q&A (до текущего вопроса)
+- Closing: персонализированное финальное сообщение с кратким отражением всех ответов
+- Off-topic classifier: промпт ДА/НЕТ + keyword fallback
+- Clarify classifier: промпт ДА/НЕТ + «?»-эвристика fallback
+- Clarify response: LLM-разъяснение + статичный вопрос из скрипта
+
+### Guardrails (защита от некорректного LLM-вывода)
+
+| Guardrail | Условие отклонения | Fallback |
+|---|---|---|
+| `validate_ack` | Содержит «?», длиннее 300 символов, пустой | Пустой ack — участник видит только вопрос |
+| `validate_closing` | Содержит «?», длиннее 800 символов, пустой | `script.CLOSING` |
+| `validate_clarify` | Содержит «?», длиннее 400 символов, пустой | Статичный fallback с текстом вопроса |
 
 ### Поддерживаемые провайдеры
 
-| Провайдер | Модель по умолчанию | Особенности |
+| Провайдер | Модель | Особенности |
 |---|---|---|
-| GigaChat (Sber) | GigaChat | Российский провайдер, GDPR-совместимость |
-| OpenAI | gpt-4o-mini | Международный провайдер |
+| GigaChat (Sber) | GigaChat | Основной провайдер; российская юрисдикция |
+| OpenAI | gpt-4o-mini | Альтернативный провайдер |
+| Статичный | — | Без LLM; детерминированные тексты |
 
-Выбор провайдера задаётся через `LLM_PROVIDER` в `.env` без изменения кода.
+Переключение провайдера доступно через Telegram researcher-меню без перезапуска.
+
+### Conversation history
+
+`LLMPromptEngine._build_history()` передаёт LLM все предыдущие пары «вопрос / ответ» при генерации acknowledgment и closing. Это позволяет модели формировать контекстно-осведомлённые фразы подтверждения (не цитируя ответы дословно).
 
 ---
 
-## 6. Безопасность
+## 6. Диалоговый автомат
+
+`DialogManager` управляет состоянием сессии и реализует следующую логику:
+
+```
+welcome()  → engine.intro() + «Нажмите кнопку ниже, чтобы начать.»
+begin()    → store.reset() → engine.question(idx=0)
+process()  →
+    if session.finished      → already_done()
+    if is_off_topic(text)    → redirect() + текущий вопрос (без продвижения, без сохранения)
+    if is_clarifying(text)   → clarify() + текущий вопрос (без продвижения, без сохранения)
+    else                     → сохранить ответ, advance index
+                               if есть следующий вопрос → question()
+                               else → session.finished=True, closing()
+```
+
+`DialogResult` возвращает `text` и `kind` (`question` / `closing` / `already_done` / `redirect` / `clarify`) — Telegram-слой использует `kind` для выбора markup (кнопки появляются только при `closing` и `already_done`).
+
+---
+
+## 7. Безопасность
 
 | Мера | Реализация |
 |---|---|
 | Аутентификация веб-панели | HTTP Basic Auth (`secrets.compare_digest`) поверх HTTPS |
-| Шифрование транспорта | TLS 1.2/1.3 (Let's Encrypt / Duck DNS, автообновление через certbot) |
-| Rate limiting бота | Sliding window: 10 сообщений / 60 сек на пользователя |
-| Ограничение размера ввода | Сообщения > 2000 символов отклоняются |
-| Таймаут LLM | GigaChat: 30 сек, OpenAI: 30 сек |
-| Audit logging | Все действия исследователя пишутся в лог (`[AUDIT]`) |
-| Whitelist исследователей | Telegram ID задаётся в `RESEARCHER_TELEGRAM_IDS` |
-| Секреты | `.env` файл, права 600, не хранится в git |
-| Uvicorn | Слушает только 127.0.0.1, снаружи недоступен |
+| Шифрование транспорта | TLS 1.2/1.3 (Let's Encrypt + Duck DNS, автообновление certbot.timer) |
+| Rate limiting бота | Sliding window: 10 сообщений / 60 сек на пользователя; 20 callback / 60 сек |
+| Ограничение размера ввода | Сообщения > 2000 символов отклоняются с мягким ответом |
+| Таймаут LLM | 30 сек для GigaChat и OpenAI |
+| Audit logging | Все действия исследователя: `[AUDIT] action=... user_id=...` |
+| Whitelist исследователей | `RESEARCHER_TELEGRAM_IDS` в `.env` |
+| Секреты | `.env` файл, права 600, исключён из git |
+| Uvicorn | Слушает только 127.0.0.1 (доступен снаружи только через nginx) |
+| Глобальный error handler | 500-ошибки возвращают страницу без stack trace |
 
 ---
 
-## 7. Развёртывание
+## 8. Развёртывание и операционная зрелость
 
-**Инфраструктура:**
-- **Облако:** Cloud.ru (ru.AZ-2), Ubuntu 22.04 LTS
-- **VM:** 2 vCPU, 4 GB RAM, 20 GB SSD
-- **Прокси:** Cloudflare Worker (обход сетевых ограничений для Telegram API)
-- **Домен:** `soc-oprosnik.duckdns.org` (бесплатный поддомен Duck DNS)
-- **HTTPS:** Let's Encrypt (Certbot), автообновление сертификата через systemd timer
+### Инфраструктура
 
-**CI/CD:**  
-Ручной деплой: `git pull && systemctl restart`. Полноценный CI/CD не реализован (вне рамок ВКР).
+| Параметр | Значение |
+|---|---|
+| Облако | Cloud.ru (Ubuntu 22.04 LTS, ru-central) |
+| VM | 2 vCPU, 4 GB RAM, 20 GB SSD |
+| Домен | `soc-oprosnik.duckdns.org` (бесплатный Duck DNS) |
+| HTTPS | Let's Encrypt (Certbot), автообновление через `certbot.timer` |
+| Прокси | Cloudflare Worker (обход сетевых ограничений для Telegram API) |
 
-**Бэкап:**  
-Ежедневный `sqlite3 .backup` (hot backup API) с ротацией 14 дней (cron), `/srv/interview/backups/`.
+### CI/CD
+
+**CI:** GitHub Actions — `python -m pytest tests/ -q --tb=short` на каждый push и pull request в `main`. Тесты проходят за 30–60 секунд.
+
+**CD:** Ручной деплой (`git pull && systemctl restart`) с pre-deploy checklist по `deploy/RUNBOOK.md`.
+
+**Post-deploy проверка:**
+```bash
+bash scripts/smoke_check.sh
+# → [OK] All checks passed (5/5)
+```
+Скрипт проверяет: статус systemd-сервисов, `/health`, `/admin/studies` с Basic Auth, TLS-сертификат.
+
+### Бэкап
+
+Ежедневный `sqlite3 .backup` (hot backup API) с последующей проверкой целостности:
+```bash
+sqlite3 backup.db "PRAGMA integrity_check;"  # → ok
+```
+Ротация 14 дней; файлы в `/srv/interview/backups/`. При ошибке целостности — запись в системный журнал через `logger`.
 
 ---
 
-## 8. Известные ограничения
+## 9. Аналитика
+
+Страница `/admin/analytics` отображает метрики активного исследования:
+
+| Метрика | Описание |
+|---|---|
+| Completion rate | Доля завершённых интервью |
+| Dropout distribution | Количество прерванных сессий по каждому вопросу |
+| Avg answer length | Средняя длина ответа (в символах) по каждому вопросу |
+| Duration stats | Min / среднее / max время прохождения интервью |
+
+Данные доступны в браузере (таблицы) и в виде CSV (кнопка «📥 Скачать CSV»).
+
+---
+
+## 10. Известные ограничения
 
 | Ограничение | Обоснование / Митигация |
 |---|---|
-| SQLite вместо PostgreSQL | Достаточно для нагрузки ВКР (< 100 сессий); переход на PostgreSQL — deferred |
-| In-memory rate limiter | Сбрасывается при перезапуске; Redis — deferred |
+| SQLite вместо PostgreSQL | Достаточно для нагрузки ВКР (< 100 сессий); WAL mode обеспечивает конкурентное чтение |
+| In-memory rate limiter | Сбрасывается при перезапуске; для production-нагрузки — Redis |
 | Один воркер uvicorn | Достаточно для единственного исследователя |
-| Нет CI/CD | Ручной деплой достаточен для одного разработчика |
-| LLM-уточнения не валидируются | Требует доработки prompt engineering |
+| Веб-активация без hot reload | Требует `systemctl restart interview-bot`; активация через Telegram-меню мгновенна |
+| Backup на том же диске | Защита от ошибок данных, не от потери диска; для production — rsync на внешний хост |
 
 ---
 
-## 9. Возможные направления для доработки
-
-1. **Качество LLM-промптов** — сейчас промпт минимален; улучшение может повысить релевантность уточняющих вопросов
-2. **Анализ данных** — встроенный базовый анализ тематик ответов (topic modeling, sentiment)
-3. **Мультиязычность** — поддержка других языков интервью
-4. **Панель аналитики** — визуализация результатов в веб-интерфейсе (графики, облако слов)
-5. **Экспорт в форматы** — Word, PDF, NVivo-совместимый формат
-6. **A/B тестирование сценариев** — сравнение двух вариантов гайда на одной выборке
-7. **Аудиоответы** — расшифровка голосовых сообщений через Whisper
-
----
-
-## 10. Доступ для тестирования
+## 11. Доступ для тестирования
 
 | Ресурс | Адрес | Доступ |
 |---|---|---|
@@ -265,13 +373,14 @@ deploy/
 
 ---
 
-## 11. Стек технологий (сводная таблица)
+## 12. Стек технологий
 
 | Категория | Технология | Версия |
 |---|---|---|
 | Язык | Python | 3.13 |
 | Telegram SDK | python-telegram-bot | 20.x |
 | Web framework | FastAPI | — |
+| Шаблонизатор | Jinja2 | — |
 | ORM | SQLAlchemy | 2.x |
 | Валидация конфига | Pydantic Settings | v2 |
 | LLM (основной) | GigaChat SDK | — |
@@ -282,9 +391,10 @@ deploy/
 | ОС сервера | Ubuntu | 22.04 LTS |
 | Облако | Cloud.ru | Evolution |
 | CDN/прокси | Cloudflare Workers | Free tier |
-| Тестирование | pytest | — |
+| Тестирование | pytest | 249 тестов |
+| CI | GitHub Actions | — |
 
 ---
 
-*Документ подготовлен для ревью научным руководителем и комиссией.*  
-*Вопросы и комментарии приветствуются — они будут учтены при доработке системы.*
+*Документ актуален по состоянию на завершение Milestone 20 (Operational Maturity).*  
+*Вопросы и комментарии научного руководителя приветствуются.*
