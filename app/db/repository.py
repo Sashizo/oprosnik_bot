@@ -68,6 +68,15 @@ class SQLiteSessionStore:
         )
 
     def _new_session_in_db(self, db: SASession, user_id: int, study_id: int | None = None) -> Session:
+        # Если study_id не передан явно — берём текущее активное исследование из БД.
+        # Это гарантирует корректную привязку сессии даже если исследование было
+        # активировано уже после запуска бота.
+        if study_id is None:
+            from app.db.models import Study as StudyORM
+            active = db.query(StudyORM).filter_by(is_active=True).first()
+            if active is not None:
+                study_id = active.id
+
         orm = InterviewSession(
             user_id=user_id,
             started_at=datetime.now(timezone.utc),
